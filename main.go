@@ -78,7 +78,7 @@ func telegramBot() {
 		log.Panic(err)
 	}
 
-	bot.Debug = false //!!!!
+	bot.Debug = false
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
