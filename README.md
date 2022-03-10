@@ -18,4 +18,9 @@
 [![Documentation](https://img.shields.io/badge/pg-documentation-informational)](http://godoc.org/github.com/go-telegram-bot-api/telegram-bot-api)
 
 
+##Build 
+
+GOOS=linux GOARCH=amd64 go build -o ./quotes -a 
+
+
 
