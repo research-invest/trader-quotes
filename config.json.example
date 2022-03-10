@@ -1,0 +1,12 @@
+{
+    "telegram-bot": "5261066167:AAGq6w7GYR7XQNbgrekhxYmYtB_twRnte-I",
+    "binanceApikeyReadOnly": "KviI4CkqCin3xVy1yu0On7rK9j666666ExCEaWldkqiMeyjJvvnLU31nMSF1CLVNV",
+    "binanceSecretKeyReadOnly": "FXjvLjDjdeMPvbrkSVgy66666gpGP162PXPFDgzd2ViMFaFXVVVX9KPoqbfg",
+    "db": {
+      "host": "trader-postgres",
+      "port": 5436,
+      "user": "dbuser",
+      "pass": "HCK6LrwUsVu63ZdF",
+      "dbname": "trader_db"
+    }
+}
