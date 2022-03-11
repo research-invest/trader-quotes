@@ -22,5 +22,9 @@
 
 GOOS=linux GOARCH=amd64 go build -o ./quotes -a 
 
+##Misc
+
+https://api.binance.com/api/v3/klines?interval=1m&limit=20&symbol=ETHBUSD
+
 
 

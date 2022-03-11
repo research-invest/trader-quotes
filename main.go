@@ -200,6 +200,7 @@ WITH coin_pairs_24_hours AS (
            k.open,
            k.close,
            k.close_time,
+           k.open_time,
            c.rank
     FROM klines AS k
              INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
@@ -234,7 +235,7 @@ FROM coin_pairs_24_hours AS t
            MIN(t.open)                                                                    AS min_value,
            ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.close_time >= NOW() - INTERVAL '10 MINUTE'
+    WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
          LEFT JOIN (
@@ -243,7 +244,7 @@ FROM coin_pairs_24_hours AS t
            MIN(t.open)                                                                    AS min_value,
            ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.close_time >= NOW() - INTERVAL '1 HOUR'
+    WHERE t.open_time >= NOW() - INTERVAL '1 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour ON t.coin_pair_id = hour.coin_pair_id
          LEFT JOIN (
@@ -252,7 +253,7 @@ FROM coin_pairs_24_hours AS t
            MIN(t.open)                                                                    AS min_value,
            ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.close_time >= NOW() - INTERVAL '4 HOUR'
+    WHERE t.open_time >= NOW() - INTERVAL '4 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
          LEFT JOIN (
@@ -261,7 +262,7 @@ FROM coin_pairs_24_hours AS t
            MIN(t.open)                                                                    AS min_value,
            ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.close_time >= NOW() - INTERVAL '12 HOUR'
+    WHERE t.open_time >= NOW() - INTERVAL '12 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
          LEFT JOIN (
@@ -270,14 +271,9 @@ FROM coin_pairs_24_hours AS t
            MIN(t.open)                                                                    AS min_value,
            ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.close_time >= NOW() - INTERVAL '1 DAY'
+    WHERE t.open_time >= NOW() - INTERVAL '1 DAY' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
-WHERE (hour.percent >= 2 OR hour.percent <= -2)
-   OR (hour4.percent >= 2 OR hour4.percent <= -2)
-   OR (hour12.percent >= 2 OR hour12.percent <= -2)
-   OR (hour24.percent >= 2 OR hour24.percent <= -2)
-LIMIT 1;
 `, coin)
 
 	if err != nil {
@@ -439,7 +435,7 @@ func getKlines() {
 			}
 
 			_, err := dbConnect.Model(newKline).
-				Where("coin_pair_id = ?coin_pair_id AND open_time = ?open_time").
+				Where("coin_pair_id = ?coin_pair_id AND open_time = ?open_time AND close_time = ?close_time").
 				OnConflict("DO NOTHING").
 				SelectOrInsert()
 
