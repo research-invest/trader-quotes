@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/adshao/go-binance/v2"
 	"github.com/cheggaaa/pb/v3"
@@ -92,69 +94,202 @@ func telegramBot() {
 			continue
 		}
 
-		if !update.Message.IsCommand() { // ignore any non-command Messages
-			continue
-		}
-
 		acc := Account{}
 		account, err := acc.addNew(update.Message.Chat)
 
 		if err != nil {
 			fmt.Printf("can't add a new file db record : %v\n", err)
 			log.Warnf("can't account create : %v", err)
+			continue
 		}
-
-		//setapikey - Set binance api key read only
-		//setsecretkey - Set binance secret key read only
-
-		//addnewcoin - Add new coin
-		//listallcoins - List all coins
-
-		//getcountklines - get count klines
-		//getcountcoins - get count coins
-		//status - Status
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
-		// Extract the command from the Message.
-		switch update.Message.Command() {
-		case "setapikey":
-			apiKey := strings.Replace(update.Message.Text, "/setapikey", "", 1)
-			err := account.saveApiKey(apiKey)
-			if err != nil {
-				msg.Text = "fail"
-				log.Warnf("can't save api key account: %v", err)
+		if update.Message.IsCommand() { // ignore any non-command Messages
 
-				break
-			} else {
-				msg.Text = "Api key saved."
-				break
+			//setapikey - Set binance api key read only
+			//setsecretkey - Set binance secret key read only
+
+			//addnewcoin - Add new coin - OLD
+			//listallcoins - List all coins - OLD
+
+			//getcountklines - get count klines - OLD
+			//getcountcoins - get count coins - OLD
+			//status - Status - OLD
+
+			// Extract the command from the Message.
+			switch update.Message.Command() {
+			case "setapikey":
+				apiKey := strings.Replace(update.Message.Text, "/setapikey", "", 1)
+				err := account.saveApiKey(apiKey)
+				if err != nil {
+					msg.Text = "No correct api key"
+					log.Warnf("can't save api key account: %v", err)
+
+					break
+				} else {
+					msg.Text = "Api key saved."
+					break
+				}
+			case "setsecretkey":
+				secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
+				err := account.saveSecretKey(secretKey)
+				if err != nil {
+					msg.Text = "No correct secret key"
+					log.Warnf("can't save secret key account: %v", err)
+					break
+				} else {
+					msg.Text = "Api secret key saved."
+					break
+				}
+			case "getcountklines":
+				//msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
+			case "getcountcoins":
+				//msg.Text = "Count coins: " + strconv.FormatInt(getCountCoins(), 10)
+			case "status":
+				msg.Text = "I'm ok."
+			default:
+				msg.Text = "I don't know that command"
 			}
-		case "setsecretkey":
-			secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
-			err := account.saveSecretKey(secretKey)
-			if err != nil {
-				msg.Text = "fail"
-				log.Warnf("can't save secret key account: %v", err)
-				break
-			} else {
-				msg.Text = "Api secret key saved."
-				break
+
+			if _, err := bot.Send(msg); err != nil {
+				log.Warnf("can't send bot message: %v", err)
 			}
-		case "getcountklines":
-			//msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
-		case "getcountcoins":
-			//msg.Text = "Count coins: " + strconv.FormatInt(getCountCoins(), 10)
-		case "status":
-			msg.Text = "I'm ok."
-		default:
-			msg.Text = "I don't know that command"
+
+			continue
 		}
 
-		if _, err := bot.Send(msg); err != nil {
-			log.Warnf("can't send bot message: %v", err)
+		rate, err := getActualExchangeRate(update.Message.Text)
+
+		if err == nil {
+			s, _ := json.MarshalIndent(rate, "", "\t")
+			msg.Text = string(s)
+			if _, err := bot.Send(msg); err != nil {
+				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+			}
+		} else {
+			msg.Text = err.Error()
+			if _, err := bot.Send(msg); err != nil {
+				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+			}
 		}
 	}
+}
+
+func getActualExchangeRate(message string) (PercentCoin, error) {
+	message = strings.ToUpper(strings.TrimSpace(message))
+
+	var rate PercentCoin
+
+	if !strings.Contains(message, "?") {
+		return rate, errors.New("no correct coin")
+	}
+
+	coin := strings.Replace(message, "?", "", 100)
+
+	if len(coin) >= 10 {
+		return rate, errors.New("no correct coin")
+	}
+
+	res, err := dbConnect.Query(&rate, `
+	
+WITH coin_pairs_24_hours AS (
+    SELECT k.coin_pair_id,
+           c.id as coin_id,
+           c.code,
+           k.open,
+           k.close,
+           k.close_time,
+           c.rank
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.couple = 'BUSD'
+      AND c.is_enabled = 1
+      AND cp.is_enabled = 1
+      AND k.close_time >= NOW() - INTERVAL '1 DAY'
+    AND c.name = ?
+    ORDER BY c.rank
+)
+
+SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                               t.code,
+                               minute10.percent AS minute10,
+                               hour.percent     AS hour,
+                               hour4.percent    AS hour4,
+                               hour12.percent   AS hour12,
+                               hour24.percent   AS hour24,
+                               hour.min_value   AS hour_min_value,
+                               hour.max_value   AS hour_max_value,
+                               hour4.min_value  AS hour4_min_value,
+                               hour4.max_value  AS hour4_max_value,
+                               hour12.min_value AS hour12_min_value,
+                               hour12.max_value AS hour12_max_value,
+                               hour24.min_value AS hour24_min_value,
+                               hour24.max_value AS hour24_max_value
+FROM coin_pairs_24_hours AS t
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '10 MINUTE'
+    GROUP BY t.coin_pair_id
+) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '1 HOUR'
+    GROUP BY t.coin_pair_id
+) as hour ON t.coin_pair_id = hour.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '4 HOUR'
+    GROUP BY t.coin_pair_id
+) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '12 HOUR'
+    GROUP BY t.coin_pair_id
+) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MAX(t.close)                                                                   AS max_value,
+           MIN(t.open)                                                                    AS min_value,
+           ROUND(CAST(((MAX(t.close) - MIN(t.open)) / MAX(t.close)) * 100 AS NUMERIC), 3) AS percent
+    FROM coin_pairs_24_hours AS t
+    WHERE t.close_time >= NOW() - INTERVAL '1 DAY'
+    GROUP BY t.coin_pair_id
+) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+WHERE (hour.percent >= 2 OR hour.percent <= -2)
+   OR (hour4.percent >= 2 OR hour4.percent <= -2)
+   OR (hour12.percent >= 2 OR hour12.percent <= -2)
+   OR (hour24.percent >= 2 OR hour24.percent <= -2)
+LIMIT 1;
+`, coin)
+
+	if err != nil {
+		log.Panic("can't get get actual exchange rate: %v", err)
+		return rate, err
+	}
+
+	if res.RowsAffected() == 0 {
+		return rate, errors.New("coin not found")
+	}
+
+	return rate, nil
 }
 
 func dbInit() {
@@ -178,7 +313,7 @@ func getPairs(pairs *[]Pair) (err error) {
 	_, err = dbConnect.Query(pairs, `
 	
 WITH coin_pairs_close_time AS (
-    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id, k.close_time AS close_time
+    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id, k.close_time
     FROM klines AS k
     INNER JOIN coins_pairs cp on cp.id = k.coin_pair_id
     INNER JOIN coins c on c.id = cp.coin_id
@@ -310,6 +445,7 @@ func getKlines() {
 
 			if err != nil {
 				log.Warnf("add newKline error: %v", err.Error())
+				fmt.Printf("add newKline error : %v\n", err.Error())
 				if !strings.Contains(err.Error(), "ERROR #23505 duplicate key value violates unique constraint") {
 					fmt.Printf("can't add a new file db record : %v\n", err.Error())
 				}

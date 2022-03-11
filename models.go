@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"strings"
 	"time"
@@ -50,7 +51,13 @@ func (a *Account) addNew(data *tgbotapi.Chat) (acc *Account, err error) {
 }
 
 func (a *Account) saveApiKey(apiKey string) (err error) {
-	a.BinanceApiKey = strings.TrimSpace(apiKey)
+	apiKey = strings.TrimSpace(apiKey)
+
+	if len(apiKey) != 64 {
+		return errors.New("api-key not correct")
+	}
+
+	a.BinanceApiKey = apiKey
 	a.UpdatedAt = time.Now()
 	_, err = dbConnect.Model(a).
 		Set("binance_api_key = ?binance_api_key").
@@ -62,7 +69,13 @@ func (a *Account) saveApiKey(apiKey string) (err error) {
 }
 
 func (a *Account) saveSecretKey(secretKey string) (err error) {
-	a.BinanceSecretKey = strings.TrimSpace(secretKey)
+	secretKey = strings.TrimSpace(secretKey)
+
+	if len(secretKey) != 64 {
+		return errors.New("secret key not correct")
+	}
+
+	a.BinanceSecretKey = secretKey
 	a.UpdatedAt = time.Now()
 	_, err = dbConnect.Model(a).
 		Set("binance_secret_key = ?binance_secret_key").
@@ -141,4 +154,22 @@ type Coin struct {
 	UpdatedAt time.Time `pg:",updated_at"`
 
 	Rank int32
+}
+
+type PercentCoin struct {
+	CoinId         int64
+	Code           string
+	Minute10       float64
+	Hour           float64
+	Hour4          float64
+	Hour12         float64
+	Hour24         float64
+	HourMinValue   float64
+	HourMaxValue   float64
+	Hour4MinValue  float64
+	Hour4MaxValue  float64
+	Hour12MinValue float64
+	Hour12MaxValue float64
+	Hour24MinValue float64
+	Hour24MaxValue float64
 }
