@@ -203,26 +203,25 @@ WITH coin_pairs_24_hours AS (
       AND cp.is_enabled = 1
       AND k.close_time >= NOW() - INTERVAL '1 DAY'
       AND c.code = ?
-    ORDER BY c.rank
 )
 
 SELECT DISTINCT ON (t.coin_id) t.coin_id,
-	   t.code,
-	   minute10.percent AS minute10,
-	   hour.percent     AS hour,
-	   hour4.percent    AS hour4,
-	   hour12.percent   AS hour12,
-	   hour24.percent   AS hour24,
-	   minute10.max_open   AS minute10_max_open,
-	   minute10.max_close   AS minute10_max_close,
-	   hour.max_open   AS hour_max_open,
-	   hour.max_close   AS hour_max_close,
-	   hour4.max_open   AS hour4_max_open,
-	   hour4.max_close   AS hour4_max_close,
-	   hour12.max_open   AS hour12_max_open,
-	   hour12.max_close   AS hour12_max_close,
-	   hour24.max_open   AS hour24_max_open,
-	   hour24.max_close   AS hour24_max_close
+                               t.code,
+                               minute10.percent AS minute10,
+                               hour.percent     AS hour,
+                               hour4.percent    AS hour4,
+                               hour12.percent   AS hour12,
+                               hour24.percent   AS hour24,
+                               minute10.max_open   AS minute10_max_open,
+                               minute10.max_close   AS minute10_max_close,
+                               hour.max_open   AS hour_max_open,
+                               hour.max_close   AS hour_max_close,
+                               hour4.max_open   AS hour4_max_open,
+                               hour4.max_close   AS hour4_max_close,
+                               hour12.max_open   AS hour12_max_open,
+                               hour12.max_close   AS hour12_max_close,
+                               hour24.max_open   AS hour24_max_open,
+                               hour24.max_close   AS hour24_max_close
 FROM coin_pairs_24_hours AS t
          LEFT JOIN (
     SELECT t.coin_pair_id,
@@ -230,7 +229,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MAX(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE' AND t.open_time <= NOW()
+    WHERE t.open_time >= NOW() - INTERVAL '10 MINUTE' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
          LEFT JOIN (
@@ -239,7 +238,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MAX(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '1 HOUR' AND t.open_time <= NOW()
+    WHERE t.open_time >= NOW() - INTERVAL '1 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour ON t.coin_pair_id = hour.coin_pair_id
          LEFT JOIN (
@@ -248,7 +247,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MAX(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '4 HOUR' AND t.open_time <= NOW()
+    WHERE t.open_time >= NOW() - INTERVAL '4 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
          LEFT JOIN (
@@ -257,7 +256,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MAX(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '12 HOUR' AND t.open_time <= NOW()
+    WHERE t.open_time >= NOW() - INTERVAL '12 HOUR' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
          LEFT JOIN (
@@ -266,7 +265,7 @@ FROM coin_pairs_24_hours AS t
            MAX(t.close) AS max_close,
            CAlC_PERCENT(MAX(t.open), MAX(t.close)) AS percent
     FROM coin_pairs_24_hours AS t
-    WHERE t.open_time >= NOW() - INTERVAL '1 DAY' AND t.open_time <= NOW()
+    WHERE t.open_time >= NOW() - INTERVAL '1 DAY' AND t.close_time <= NOW()
     GROUP BY t.coin_pair_id
 ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
 `, coin)
