@@ -157,19 +157,21 @@ type Coin struct {
 }
 
 type PercentCoin struct {
-	CoinId         int64
-	Code           string
-	Minute10       float64
-	Hour           float64
-	Hour4          float64
-	Hour12         float64
-	Hour24         float64
-	HourMinValue   float64
-	HourMaxValue   float64
-	Hour4MinValue  float64
-	Hour4MaxValue  float64
-	Hour12MinValue float64
-	Hour12MaxValue float64
-	Hour24MinValue float64
-	Hour24MaxValue float64
+	CoinId           int64
+	Code             string
+	Minute10         float64
+	Hour             float64
+	Hour4            float64
+	Hour12           float64
+	Hour24           float64
+	Minute10MaxOpen  float64
+	Minute10MaxClose float64
+	HourMaxOpen      float64
+	HourMaxClose     float64
+	Hour4MaxOpen     float64
+	Hour4MaxClose    float64
+	Hour12MaxOpen    float64
+	Hour12MaxClose   float64
+	Hour24MaxOpen    float64
+	Hour24MaxClose   float64
 }
