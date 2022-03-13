@@ -429,7 +429,7 @@ func getKlines() {
 			}
 
 			_, err := dbConnect.Model(newKline).
-				Where("coin_pair_id = ?coin_pair_id AND open_time = ?open_time AND close_time = ?close_time").
+				Where("coin_pair_id = ?coin_pair_id AND open_time >= ?open_time").
 				OnConflict("DO NOTHING").
 				SelectOrInsert()
 
