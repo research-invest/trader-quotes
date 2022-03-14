@@ -113,10 +113,14 @@ func telegramBot() {
 
 		if update.Message.IsCommand() { // ignore any non-command Messages
 
-			//setapikey - Set binance api key read only
-			//setsecretkey - Set binance secret key read only
-			//getqueriesapierror - Get count queries api error
-			//getqueriesapi - Get count queries api
+			/*
+				setapikey - Set binance api key read only
+				setsecretkey - Set binance secret key read only
+				getqueriesapierror - Get count queries api error
+				getqueriesapi - Get count queries api
+				getcountklines - Get count klines
+				status - Status service
+			*/
 
 			// Extract the command from the Message.
 			switch update.Message.Command() {
@@ -149,7 +153,7 @@ func telegramBot() {
 			case "getqueriesapi":
 				msg.Text = "Count query api: " + getCountQueriesApi()
 			case "getcountklines":
-				//msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
+				msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
 			case "status":
 				msg.Text = "I'm ok."
 			default:
@@ -178,6 +182,11 @@ func telegramBot() {
 			}
 		}
 	}
+}
+
+func getCountKlines() int64 {
+	count, _ := dbConnect.Model((*Kline)(nil)).Count()
+	return int64(count)
 }
 
 func getActualExchangeRate(message string) (PercentCoin, error) {
