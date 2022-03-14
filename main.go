@@ -515,6 +515,8 @@ func getAccountsInfo() {
 		client := binance.NewClient(account.BinanceApiKey, account.BinanceSecretKey)
 		accountInfo, err := client.NewGetAccountService().Do(context.Background())
 
+		CounterQueriesApiIncr()
+
 		if err != nil {
 			//jsonF, _ := json.Marshal(err)
 			//fmt.Println(string(jsonF))
@@ -528,6 +530,8 @@ func getAccountsInfo() {
 					return
 				}
 			} else {
+				CounterQueriesApiIncrError()
+
 				fmt.Println(err.Error())
 				log.Warnf("can't get accountInfo NewGetAccountService: %v", err)
 			}
