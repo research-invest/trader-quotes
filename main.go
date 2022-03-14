@@ -30,6 +30,8 @@ func main() {
 
 	dbInit()
 
+	redisInit()
+
 	defer func() {
 		err := dbConnect.Close()
 		if err != nil {
@@ -52,9 +54,13 @@ func main() {
 	//getAccountsInfo()
 
 	for {
-		s := time.Now().Second()
+		t := time.Now()
 
-		if s == 0 {
+		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+			CounterQueriesApiSetZero()
+		}
+
+		if t.Second() == 0 {
 			getKlines()
 		}
 
@@ -109,13 +115,8 @@ func telegramBot() {
 
 			//setapikey - Set binance api key read only
 			//setsecretkey - Set binance secret key read only
-
-			//addnewcoin - Add new coin - OLD
-			//listallcoins - List all coins - OLD
-
-			//getcountklines - get count klines - OLD
-			//getcountcoins - get count coins - OLD
-			//status - Status - OLD
+			//getqueriesapierror - Get count queries api error
+			//getqueriesapi - Get count queries api
 
 			// Extract the command from the Message.
 			switch update.Message.Command() {
@@ -142,10 +143,13 @@ func telegramBot() {
 					msg.Text = "Api secret key saved."
 					break
 				}
+
+			case "getqueriesapierror":
+				msg.Text = "Count query api errors: " + getCountQueriesApiError()
+			case "getqueriesapi":
+				msg.Text = "Count query api: " + getCountQueriesApi()
 			case "getcountklines":
 				//msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
-			case "getcountcoins":
-				//msg.Text = "Count coins: " + strconv.FormatInt(getCountCoins(), 10)
 			case "status":
 				msg.Text = "I'm ok."
 			default:
@@ -389,6 +393,8 @@ func getKlines() {
 		klines, err := client.NewKlinesService().Symbol(strings.ToUpper(pair.Pair)).
 			Interval(pair.Interval).Limit(20).Do(context.Background())
 
+		CounterQueriesApiIncr()
+
 		//if pair.CoinPairId == 3 {
 		//	fmt.Println("klines")
 		//	jsonF, _ := json.Marshal(klines)
@@ -396,6 +402,8 @@ func getKlines() {
 		//}
 
 		if err != nil {
+			CounterQueriesApiIncrError()
+
 			fmt.Println(err.Error())
 			log.Warnf("get NewKlinesService error: %v", err)
 			continue
