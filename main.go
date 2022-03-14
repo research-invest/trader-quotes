@@ -116,8 +116,8 @@ func telegramBot() {
 			/*
 				setapikey - Set binance api key read only
 				setsecretkey - Set binance secret key read only
-				getqueriesapierror - Get count queries api error
-				getqueriesapi - Get count queries api
+				getcountqueriesapi - Get count queries api
+				getcountqueriesapierror - Get count queries api error
 				getcountklines - Get count klines
 				status - Status service
 			*/
@@ -148,10 +148,10 @@ func telegramBot() {
 					break
 				}
 
-			case "getqueriesapierror":
-				msg.Text = "Count query api errors: " + getCountQueriesApiError()
-			case "getqueriesapi":
+			case "getcountqueriesapi":
 				msg.Text = "Count query api: " + getCountQueriesApi()
+			case "getcountqueriesapierror":
+				msg.Text = "Count query api errors: " + getCountQueriesApiError()
 			case "getcountklines":
 				msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
 			case "status":
