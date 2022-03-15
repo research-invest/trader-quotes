@@ -175,3 +175,11 @@ type PercentCoin struct {
 	Hour24AvgOpen    float64
 	Hour24MaxClose   float64
 }
+
+type BalanceInfo struct {
+	Code     string
+	Rank     int
+	Quantity float64
+	Price    float64
+	Sum      float64
+}

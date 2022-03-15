@@ -120,6 +120,7 @@ func telegramBot() {
 				getcountqueriesapierror - Get count queries api error
 				getcountklines - Get count klines
 				status - Status service
+				balance - Get balance info
 			*/
 
 			// Extract the command from the Message.
@@ -130,11 +131,10 @@ func telegramBot() {
 				if err != nil {
 					msg.Text = "No correct api key"
 					log.Warnf("can't save api key account: %v", err)
-
-					break
+					//break
 				} else {
 					msg.Text = "Api key saved."
-					break
+					//break
 				}
 			case "setsecretkey":
 				secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
@@ -142,10 +142,10 @@ func telegramBot() {
 				if err != nil {
 					msg.Text = "No correct secret key"
 					log.Warnf("can't save secret key account: %v", err)
-					break
+					//break
 				} else {
 					msg.Text = "Api secret key saved."
-					break
+					//break
 				}
 
 			case "getcountqueriesapi":
@@ -156,6 +156,8 @@ func telegramBot() {
 				msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
 			case "status":
 				msg.Text = "I'm ok."
+			case "balance":
+				msg.Text = getBalanceInfo(account.Id)
 			default:
 				msg.Text = "I don't know that command"
 			}
@@ -182,6 +184,49 @@ func telegramBot() {
 			}
 		}
 	}
+}
+
+func getBalanceInfo(accountId int64) string {
+
+	var balance []BalanceInfo
+	res, err := dbConnect.Query(&balance, `
+	
+WITH coins_last_prices AS (
+    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id,
+    c.id,
+    c.code,
+    c.rank,
+    k.low,
+    k.high
+    FROM klines AS k
+    INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+    INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.coin_id IN (
+        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
+        ) AND cp.couple = 'BUSD'
+      AND c.is_enabled = 1 AND cp.is_enabled = 1
+      AND k.close_time >= NOW() - INTERVAL '1 DAY'
+    ORDER BY k.coin_pair_id, k.close_time DESC
+    )
+
+SELECT clp.code, clp.rank, (b.free +b.locked) AS quantity, clp.high AS price, ((b.free +b.locked) * clp.high) AS sum
+FROM balances AS b
+INNER JOIN coins_last_prices AS clp ON clp.id = b.coin_id
+WHERE account_id = ?
+ORDER BY sum DESC;
+	`, accountId, accountId)
+
+	if err != nil {
+		log.Warnf("can't get balance info: %v", err)
+		return err.Error()
+	}
+
+	if res.RowsAffected() == 0 {
+		return "Empty balance!"
+	}
+
+	s, _ := json.MarshalIndent(balance, "", "\t")
+	return string(s)
 }
 
 func getCountKlines() int64 {
@@ -507,7 +552,7 @@ func getAccountsInfo() {
 		Select()
 
 	if err != nil {
-		log.Panic("can't get accounts: %v", err)
+		log.Warnf("can't get accounts: %v", err)
 		panic(err)
 	}
 
