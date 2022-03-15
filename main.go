@@ -193,26 +193,37 @@ func getBalanceInfo(accountId int64) string {
 	
 WITH coins_last_prices AS (
     SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id,
-    c.id,
-    c.code,
-    c.rank,
-    k.low,
-    k.high
+                                        c.id,
+                                        c.code,
+                                        c.rank,
+                                        k.low,
+                                        k.high
     FROM klines AS k
-    INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
-    INNER JOIN coins AS c ON c.id = cp.coin_id
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
     WHERE cp.coin_id IN (
         SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
-        ) AND cp.couple = 'BUSD'
+    ) AND cp.couple = 'BUSD'
       AND c.is_enabled = 1 AND cp.is_enabled = 1
       AND k.close_time >= NOW() - INTERVAL '1 DAY'
     ORDER BY k.coin_pair_id, k.close_time DESC
+ ), bal AS (
+    SELECT DISTINCT ON (b.coin_id) b.coin_id,
+                                   b.free,
+                                   b.locked
+    FROM balances AS b
+    WHERE b.coin_id IN (
+        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
     )
+    ORDER BY b.coin_id, b.created_at DESC
+)
 
-SELECT clp.code, clp.rank, (b.free +b.locked) AS quantity, clp.high AS price, ((b.free +b.locked) * clp.high) AS sum
-FROM balances AS b
+SELECT clp.code, clp.rank,
+       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
+       ROUND(CAST(clp.high AS NUMERIC), 2)  AS price,
+       ROUND(CAST(((b.free +b.locked) * clp.high) AS NUMERIC), 2)  AS sum
+FROM bal AS b
 INNER JOIN coins_last_prices AS clp ON clp.id = b.coin_id
-WHERE account_id = ?
 ORDER BY sum DESC;
 	`, accountId, accountId)
 
@@ -623,9 +634,10 @@ func getAccountsInfo() {
 			}
 
 			_, err := dbConnect.Model(newBalance).
-				Where("coin_id = ?coin_id AND account_id = ?account_id AND free = ?free AND locked = ?locked").
-				OnConflict("DO NOTHING").
-				SelectOrInsert()
+				//Where("coin_id = ?coin_id AND account_id = ?account_id").
+				//OnConflict("DO NOTHING").
+				//SelectOrInsert()
+				Insert()
 
 			if err != nil {
 				fmt.Printf("add new balance error: %v\n", err.Error())
