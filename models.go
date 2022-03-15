@@ -164,14 +164,14 @@ type PercentCoin struct {
 	Hour4            float64
 	Hour12           float64
 	Hour24           float64
-	Minute10MaxOpen  float64
+	Minute10AvgOpen  float64
 	Minute10MaxClose float64
-	HourMaxOpen      float64
+	HourAvgOpen      float64
 	HourMaxClose     float64
-	Hour4MaxOpen     float64
+	Hour4AvgOpen     float64
 	Hour4MaxClose    float64
-	Hour12MaxOpen    float64
+	Hour12AvgOpen    float64
 	Hour12MaxClose   float64
-	Hour24MaxOpen    float64
+	Hour24AvgOpen    float64
 	Hour24MaxClose   float64
 }
