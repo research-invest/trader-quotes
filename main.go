@@ -14,6 +14,7 @@ import (
 	"github.com/go-pg/pg/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/sirupsen/logrus"
+	"go-trader/models"
 	"os"
 	"strconv"
 	"strings"
@@ -22,7 +23,7 @@ import (
 
 var dbConnect pg.DB
 var log = logrus.New()
-var getKlinesIsWorking, getAccountsInfoIsWorking bool
+var getKlinesIsWorking, getAccountsInfoIsWorking, getOrdersAccountsIsWorking bool
 
 func main() {
 	setLogParam()
@@ -47,6 +48,7 @@ func main() {
 	go func() {
 		for {
 			getAccountsInfo()
+			getOrdersAccounts()
 			time.Sleep(30 * time.Minute)
 		}
 	}()
@@ -55,6 +57,10 @@ func main() {
 
 	for {
 		t := time.Now()
+
+		if t.Hour() >= 3 && t.Hour() < 6 {
+			time.Sleep(1 * time.Hour) // temp
+		}
 
 		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
 			CounterQueriesApiSetZero()
@@ -66,7 +72,6 @@ func main() {
 
 		time.Sleep(1 * time.Second)
 	}
-
 }
 
 func setLogParam() {
@@ -366,6 +371,11 @@ func dbInit() {
 		log.Panic(err)
 		panic(err)
 	}
+
+	//dbConnect.AddQueryHook(pgdebug.DebugHook{
+	//	// Print all queries.
+	//	Verbose: true,
+	//})
 }
 
 func getPairs(pairs *[]Pair) (err error) {
@@ -552,7 +562,7 @@ func getAccountsInfo() {
 		return
 	}
 
-	getKlinesIsWorking = true
+	getAccountsInfoIsWorking = true
 
 	fmt.Println("Get accounts info start work")
 
@@ -646,7 +656,7 @@ func getAccountsInfo() {
 
 		}
 
-		getKlinesIsWorking = false
+		getAccountsInfoIsWorking = false
 	}
 
 	// create and start new bar
@@ -666,4 +676,99 @@ func getAccountsInfo() {
 
 func getTimestampFromMilliseconds(milliseconds int64) time.Time {
 	return time.Unix(0, milliseconds*int64(time.Millisecond))
+}
+
+func getOrdersAccounts() {
+
+	if getOrdersAccountsIsWorking == true {
+		return
+	}
+
+	getOrdersAccountsIsWorking = true
+
+	fmt.Println("Get accounts info start work")
+
+	var accounts []Account
+	err := dbConnect.Model(&accounts).
+		//Relation("Balances").
+		//Relation("Balances.Coin").
+		Where("account.is_enabled = ?", 1).
+		Where("binance_api_key IS NOT NULL AND binance_secret_key IS NOT NULL").
+		Select()
+
+	if err != nil {
+		log.Warnf("can't get accounts by get orders: %v", err)
+		panic(err)
+	}
+
+	for _, account := range accounts {
+
+		client := binance.NewClient(account.BinanceApiKey, account.BinanceSecretKey)
+
+		for _, coin := range account.getCoinsInBalance() {
+
+			symbol := coin.Pair
+			orders, err := client.NewListOrdersService().Symbol(symbol).
+				//StartTime(startTime). //EndTime(endTime).
+				Limit(50).Do(context.Background())
+
+			CounterQueriesApiIncr()
+
+			if err != nil {
+				fmt.Println(err.Error())
+				CounterQueriesApiIncrError()
+				log.Warnf("Error NewListOrdersService: %v", err)
+				return
+			}
+
+			for _, order := range orders {
+
+				//fmt.Println("order")
+				//jsonF, _ := json.Marshal(order)
+				//fmt.Println(string(jsonF))
+
+				price, _ := strconv.ParseFloat(order.Price, 64)
+				stopPrice, _ := strconv.ParseFloat(order.StopPrice, 64)
+				origQty, _ := strconv.ParseFloat(order.OrigQuantity, 64)
+				executedQty, _ := strconv.ParseFloat(order.ExecutedQuantity, 64)
+				cummulativeQuoteQuantity, _ := strconv.ParseFloat(order.CummulativeQuoteQuantity, 64)
+				icebergQuantity, _ := strconv.ParseFloat(order.IcebergQuantity, 64)
+				origQuoteOrderQuantity, _ := strconv.ParseFloat(order.OrigQuoteOrderQuantity, 64)
+
+				newOrder := &models.Order{
+					CoinPairId:          coin.PairId,
+					AccountId:           account.Id,
+					OrderId:             order.OrderID,
+					OrderListId:         order.OrderListId,
+					ClientOrderId:       order.ClientOrderID,
+					OrigQty:             origQty,
+					ExecutedQty:         executedQty,
+					CummulativeQuoteQty: cummulativeQuoteQuantity,
+					Price:               price,
+					StopPrice:           stopPrice,
+					IcebergQty:          icebergQuantity,
+					OrigQuoteOrderQty:   origQuoteOrderQuantity,
+					Time:                order.Time,
+					UpdateTime:          order.UpdateTime,
+					CreatedAt:           time.Now(),
+				}
+
+				newOrder.Status = newOrder.GetStatus(order.Status)
+				newOrder.Type = newOrder.GetType(order.Type)
+				newOrder.Side = newOrder.GetSide(order.Side)
+
+				_, err := dbConnect.Model(newOrder).
+					Where("order_id = ?order_id").
+					OnConflict("DO NOTHING").
+					SelectOrInsert()
+
+				if err != nil {
+					fmt.Printf("add new order error: %v\n", err.Error())
+					log.Warnf("add new order error: %v", err.Error())
+				}
+			}
+		}
+
+		getOrdersAccountsIsWorking = false
+	}
 }

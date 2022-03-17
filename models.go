@@ -30,6 +30,8 @@ type Account struct {
 	Email             string
 	CreatedAt         time.Time `pg:",created_at"`
 	UpdatedAt         time.Time `pg:",updated_at"`
+	//Balances          *[]Balance `pg:",fk:file_id"`
+	//Balances []Balance `pg:"polymorphic,join_fk:account_id"`
 }
 
 func (a *Account) addNew(data *tgbotapi.Chat) (acc *Account, err error) {
@@ -86,6 +88,30 @@ func (a *Account) saveSecretKey(secretKey string) (err error) {
 	return err
 }
 
+func (a *Account) getCoinsInBalance() []BalanceCoin {
+	var coins []BalanceCoin
+
+	_, err := dbConnect.Query(&coins, `
+SELECT c.id, c.code || cp.couple AS pair, cp.id AS pair_id
+FROM coins AS c
+INNER JOIN coins_pairs cp on c.id = cp.coin_id AND cp.is_enabled = 1
+WHERE c.id IN(
+    SELECT b.coin_id 
+    FROM balances AS b 
+	WHERE account_id = ? -- AND (b.free + b.locked) > 1
+    GROUP BY b.coin_id
+    )
+AND c.is_enabled = 1;
+`, a.Id)
+
+	if err != nil {
+		log.Panic("can't get coins in balance: %v", err)
+		return nil
+	}
+
+	return coins
+}
+
 func (a *Account) disableAccount() (err error) {
 	a.IsEnabled = IS_ENABLED_FALSE
 	//a.BinanceApiKey = ""
@@ -139,6 +165,7 @@ type Balance struct {
 	Locked    float64   `pg:",locked,use_zero"`
 	CreatedAt time.Time `pg:",created_at"`
 	UpdatedAt time.Time `pg:",updated_at"`
+	Coin      *Coin     `pg:",fk:coin_id"`
 }
 
 type Coin struct {
@@ -154,6 +181,12 @@ type Coin struct {
 	UpdatedAt time.Time `pg:",updated_at"`
 
 	Rank int32
+}
+
+type BalanceCoin struct {
+	Id     int64
+	Pair   string `pg:",pair,use_zero"`
+	PairId int64
 }
 
 type PercentCoin struct {
