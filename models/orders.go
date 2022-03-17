@@ -39,13 +39,13 @@ const (
 	OrderStatusTypeRejected        binance.OrderStatusType = "REJECTED"
 	OrderStatusTypeExpired         binance.OrderStatusType = "EXPIRED"
 
-	OrderTypeLimit              binance.OrderType = "LIMIT"
-	OrderTypeMarket             binance.OrderType = "MARKET"
-	OrderTypeStop               binance.OrderType = "STOP"
-	OrderTypeStopMarket         binance.OrderType = "STOP_MARKET"
-	OrderTypeTakeProfit         binance.OrderType = "TAKE_PROFIT"
-	OrderTypeTakeProfitMarket   binance.OrderType = "TAKE_PROFIT_MARKET"
-	OrderTypeTrailingStopMarket binance.OrderType = "TRAILING_STOP_MARKET"
+	OrderTypeLimit           binance.OrderType = "LIMIT"
+	OrderTypeMarket          binance.OrderType = "MARKET"
+	OrderTypeLimitMaker      binance.OrderType = "LIMIT_MAKER"
+	OrderTypeStopLoss        binance.OrderType = "STOP_LOSS"
+	OrderTypeStopLossLimit   binance.OrderType = "STOP_LOSS_LIMIT"
+	OrderTypeTakeProfit      binance.OrderType = "TAKE_PROFIT"
+	OrderTypeTakeProfitLimit binance.OrderType = "TAKE_PROFIT_LIMIT"
 
 	SideTypeBuy  binance.SideType = "BUY"
 	SideTypeSell binance.SideType = "SELL"
@@ -71,13 +71,13 @@ func (o *Order) GetStatus(status binance.OrderStatusType) int8 {
 
 func (o *Order) GetType(orderType binance.OrderType) int8 {
 	OrderTypes := map[binance.OrderType]int8{
-		OrderTypeLimit:              1,
-		OrderTypeMarket:             2,
-		OrderTypeStop:               3,
-		OrderTypeStopMarket:         4,
-		OrderTypeTakeProfit:         5,
-		OrderTypeTakeProfitMarket:   6,
-		OrderTypeTrailingStopMarket: 7,
+		OrderTypeLimit:           1,
+		OrderTypeMarket:          2,
+		OrderTypeLimitMaker:      3,
+		OrderTypeStopLoss:        4,
+		OrderTypeStopLossLimit:   5,
+		OrderTypeTakeProfit:      6,
+		OrderTypeTakeProfitLimit: 7,
 	}
 
 	if intStatus, ok := OrderTypes[orderType]; ok {

@@ -644,7 +644,7 @@ func getAccountsInfo() {
 			}
 
 			_, err := dbConnect.Model(newBalance).
-				//Where("coin_id = ?coin_id AND account_id = ?account_id").
+				//Where("coin_id = ?coin_id AND account_id = ?account_id AND (free = ?free OR locked = ?locked)").
 				//OnConflict("DO NOTHING").
 				//SelectOrInsert()
 				Insert()
