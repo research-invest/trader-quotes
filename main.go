@@ -218,7 +218,7 @@ WITH coins_last_prices AS (
       AND c.is_enabled = 1 AND cp.is_enabled = 1
       AND k.close_time >= NOW() - INTERVAL '1 DAY'
     ORDER BY k.coin_pair_id, k.close_time DESC
- ), bal AS (
+), bal AS (
     SELECT DISTINCT ON (b.coin_id) b.coin_id,
                                    b.free,
                                    b.locked
@@ -235,6 +235,13 @@ SELECT clp.code, clp.rank,
        ROUND(CAST(((b.free +b.locked) * clp.high) AS NUMERIC), 2)  AS sum
 FROM bal AS b
 INNER JOIN coins_last_prices AS clp ON clp.id = b.coin_id
+UNION
+SELECT 'BUSD', 0,
+       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
+       1 AS price,
+       ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
+FROM bal AS b
+WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'BUSD')
 ORDER BY sum DESC;
 	`, accountId, accountId)
 
@@ -775,8 +782,11 @@ func getOrdersAccounts() {
 	//Activate coins by balance
 	_, err = dbConnect.Model((*Coin)(nil)).Exec(`
 	UPDATE coins AS c SET is_enabled = 1, interval = '5m' WHERE id IN(
-		SELECT coin_id FROM balances GROUP BY coin_id
-	) AND c.interval <> '5m';
+		SELECT b.coin_id
+		FROM balances AS b
+		INNER JOIN coins_pairs cp on b.coin_id = cp.coin_id AND cp.is_enabled = 1
+		GROUP BY b.coin_id
+    ) AND c.interval <> '5m';
 `)
 
 }
