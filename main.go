@@ -251,6 +251,7 @@ ORDER BY sum DESC;
 	table := tablewriter.NewWriter(tableString)
 	table.SetHeader([]string{"Name", "Rank", "Quantity", "Price", "Sum"})
 
+	var total float64
 	for _, item := range balance {
 		table.Append([]string{
 			item.Code,
@@ -259,7 +260,11 @@ ORDER BY sum DESC;
 			FloatToStr(item.Price),
 			FloatToStr(item.Sum),
 		})
+
+		total = total + item.Sum
 	}
+
+	table.SetFooter([]string{"", "", "", "Total", fmt.Sprintf("$%.2f", total)})
 
 	table.Render()
 
@@ -584,6 +589,7 @@ func getAccountsInfo() {
 			//jsonF, _ := json.Marshal(err)
 			//fmt.Println(string(jsonF))
 			//{"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}
+			CounterQueriesApiIncrError()
 
 			if strings.Contains(err.Error(), "<APIError> code=-2015, msg=Invalid API-key, IP, or permissions for action.") { // to const error text
 				err := account.disableAccount()
@@ -593,8 +599,6 @@ func getAccountsInfo() {
 					return
 				}
 			} else {
-				CounterQueriesApiIncrError()
-
 				fmt.Println(err.Error())
 				log.Warnf("can't get accountInfo NewGetAccountService: %v", err)
 			}
@@ -704,8 +708,7 @@ func getOrdersAccounts() {
 
 		for _, coin := range account.getCoinsInBalance() {
 
-			symbol := coin.Pair
-			orders, err := client.NewListOrdersService().Symbol(symbol).
+			orders, err := client.NewListOrdersService().Symbol(coin.Pair).
 				//StartTime(startTime). //EndTime(endTime).
 				Limit(50).Do(context.Background())
 
@@ -715,7 +718,7 @@ func getOrdersAccounts() {
 				fmt.Println(err.Error())
 				CounterQueriesApiIncrError()
 				log.Warnf("Error NewListOrdersService: %v", err)
-				return
+				continue
 			}
 
 			for _, order := range orders {
@@ -768,4 +771,12 @@ func getOrdersAccounts() {
 
 		getOrdersAccountsIsWorking = false
 	}
+
+	//Activate coins by balance
+	_, err = dbConnect.Model((*Coin)(nil)).Exec(`
+	UPDATE coins AS c SET is_enabled = 1, interval = '5m' WHERE id IN(
+		SELECT coin_id FROM balances GROUP BY coin_id
+	) AND c.interval <> '5m';
+`)
+
 }
