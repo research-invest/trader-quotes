@@ -242,6 +242,13 @@ SELECT 'BUSD', 0,
        ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
 FROM bal AS b
 WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'BUSD')
+UNION
+SELECT 'USDT', 0,
+       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
+       1 AS price,
+       ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
+FROM bal AS b
+WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'USDT')
 ORDER BY sum DESC;
 	`, accountId, accountId)
 
