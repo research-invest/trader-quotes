@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"github.com/adshao/go-binance/v2"
 	"github.com/cheggaaa/pb/v3"
+	"github.com/go-pg/pg/extra/pgdebug"
 	"github.com/go-pg/pg/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 	"go-trader/models"
 	"os"
@@ -125,7 +127,8 @@ func telegramBot() {
 				getcountqueriesapierror - Get count queries api error
 				getcountklines - Get count klines
 				status - Status service
-				balance - Get balance info
+				getbalance - Get balance info
+				syncbalance - Sync balance info
 			*/
 
 			// Extract the command from the Message.
@@ -161,8 +164,12 @@ func telegramBot() {
 				msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
 			case "status":
 				msg.Text = "I'm ok."
-			case "balance":
+			case "getbalance":
 				msg.Text = getBalanceInfo(account.Id)
+			case "syncbalance":
+				getAccountsInfo()
+				getOrdersAccounts()
+				msg.Text = "sync"
 			default:
 				msg.Text = "I don't know that command"
 			}
@@ -192,7 +199,6 @@ func telegramBot() {
 }
 
 func getBalanceInfo(accountId int64) string {
-
 	var balance []BalanceInfo
 	res, err := dbConnect.Query(&balance, `
 	
@@ -241,8 +247,23 @@ ORDER BY sum DESC;
 		return "Empty balance!"
 	}
 
-	s, _ := json.MarshalIndent(balance, "", "\t")
-	return string(s)
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Rank", "Quantity", "Price", "Sum"})
+
+	for _, item := range balance {
+		table.Append([]string{
+			item.Code,
+			IntToStr(item.Rank),
+			FloatToStr(item.Quantity),
+			FloatToStr(item.Price),
+			FloatToStr(item.Sum),
+		})
+	}
+
+	table.Render()
+
+	return tableString.String()
 }
 
 func getCountKlines() int64 {
@@ -372,10 +393,10 @@ func dbInit() {
 		panic(err)
 	}
 
-	//dbConnect.AddQueryHook(pgdebug.DebugHook{
-	//	// Print all queries.
-	//	Verbose: true,
-	//})
+	dbConnect.AddQueryHook(pgdebug.DebugHook{
+		// Print all queries.
+		Verbose: false,
+	})
 }
 
 func getPairs(pairs *[]Pair) (err error) {
@@ -531,30 +552,6 @@ func getKlines() {
 	bar.Finish()
 
 	getKlinesIsWorking = false
-
-	//1499040000000,      // Open time
-	//	"0.01634790",       // Open
-	//	"0.80000000",       // High
-	//	"0.01575800",       // Low
-	//	"0.01577100",       // Close
-	//	"148976.11427815",  // Volume
-	//	1499644799999,      // Close time
-	//	"2434.19055334",    // Quote asset volume
-	//	308,                // Number of trades
-	//	"1756.87402397",    // Taker buy base asset volume
-	//	"28.46694368",      // Taker buy quote asset volume
-	//	"17928899.62484339" // Ignore.
-
-	//openOrders, err := client.NewListOpenOrdersService().Symbol("BNBETH").
-	//	Do(context.Background())
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//for _, o := range openOrders {
-	//	fmt.Println(o)
-	//}
-
 }
 
 func getAccountsInfo() {
@@ -644,10 +641,10 @@ func getAccountsInfo() {
 			}
 
 			_, err := dbConnect.Model(newBalance).
-				//Where("coin_id = ?coin_id AND account_id = ?account_id AND (free = ?free OR locked = ?locked)").
-				//OnConflict("DO NOTHING").
-				//SelectOrInsert()
-				Insert()
+				Where("coin_id = ?coin_id AND account_id = ?account_id AND free = ?free AND locked = ?locked").
+				OnConflict("DO NOTHING").
+				SelectOrInsert()
+			//Insert()
 
 			if err != nil {
 				fmt.Printf("add new balance error: %v\n", err.Error())
@@ -686,7 +683,7 @@ func getOrdersAccounts() {
 
 	getOrdersAccountsIsWorking = true
 
-	fmt.Println("Get accounts info start work")
+	fmt.Println("Get accounts orders work")
 
 	var accounts []Account
 	err := dbConnect.Model(&accounts).
