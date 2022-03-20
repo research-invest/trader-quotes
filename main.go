@@ -552,13 +552,13 @@ func getKlines() {
 			}
 
 			_, err := dbConnect.Model(newKline).
-				Where("coin_pair_id = ?coin_pair_id AND open_time >= ?open_time").
+				Where("coin_pair_id = ?coin_pair_id AND open_time > ?open_time").
 				OnConflict("DO NOTHING").
 				SelectOrInsert()
 
 			if err != nil {
-				log.Warnf("add newKline error: %v", err.Error())
-				fmt.Printf("add newKline error : %v\n", err.Error())
+				log.Warnf("add newKline error: %v, cpid: %v, open_time: %v\n", err.Error(), newKline.CoinPairId, newKline.OpenTime)
+				fmt.Printf("add newKline error: %v, cpid: %v, open_time: %v\n", err.Error(), newKline.CoinPairId, newKline.OpenTime)
 				if !strings.Contains(err.Error(), "ERROR #23505 duplicate key value violates unique constraint") {
 					fmt.Printf("can't add a new file db record : %v\n", err.Error())
 				}
