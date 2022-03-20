@@ -191,21 +191,22 @@ type BalanceCoin struct {
 
 type PercentCoin struct {
 	CoinId           int64
+	Rank             int
 	Code             string
 	Minute10         float64
 	Hour             float64
 	Hour4            float64
 	Hour12           float64
 	Hour24           float64
-	Minute10AvgOpen  float64
+	Minute10MinOpen  float64
 	Minute10MaxClose float64
-	HourAvgOpen      float64
+	HourMinOpen      float64
 	HourMaxClose     float64
-	Hour4AvgOpen     float64
+	Hour4MinOpen     float64
 	Hour4MaxClose    float64
-	Hour12AvgOpen    float64
+	Hour12MinOpen    float64
 	Hour12MaxClose   float64
-	Hour24AvgOpen    float64
+	Hour24MinOpen    float64
 	Hour24MaxClose   float64
 }
 
