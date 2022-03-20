@@ -674,8 +674,6 @@ func getAccountsInfo() {
 		getAccountsInfoIsWorking = false
 	}
 
-	// create and start new bar
-
 	//if pair.CoinPairId == 3 {
 	//	fmt.Println("klines")
 	//	jsonF, _ := json.Marshal(klines)
