@@ -461,7 +461,7 @@ FROM (
          WHERE cp.is_enabled = 1 AND c.is_enabled = 1
          GROUP BY pair, c.id, cp.id, c.interval, cpct.close_time, c.rank
      ) AS t
-WHERE (t.close_time IS NULL OR t.close_time <= t.time_interval)
+WHERE (t.close_time IS NULL OR t.close_time < t.time_interval)
 ORDER BY t.rank;
 `)
 
