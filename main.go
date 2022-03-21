@@ -69,9 +69,9 @@ func main() {
 
 		if t.Second() == 0 {
 			getKlines()
+			time.Sleep(1 * time.Minute)
 		}
 
-		time.Sleep(1 * time.Second)
 	}
 }
 
