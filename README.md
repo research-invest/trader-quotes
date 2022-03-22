@@ -32,7 +32,6 @@ GOOS=linux GOARCH=amd64 go build -o ./quotes -a
 ##Misc
 
 https://api.binance.com/api/v3/klines?interval=1m&limit=20&symbol=ETHBUSD
-https://api.binance.com/api/v3/allOrders?limit=50&symbol=DOTBUSD&timestamp=1647721158355&signature=ebd909bb5cab31e1bce92172e6ded30a08e0be634447f3602e96af10516f5d51
-
+https://www.postman.com/api-noob/workspace/binance-apis/request/15523775-0de7f571-3528-4fa9-8b35-8c494bbc5ef6
 
 

@@ -740,12 +740,13 @@ func getOrdersAccounts() {
 	for _, account := range accounts {
 
 		client := binance.NewClient(account.BinanceApiKey, account.BinanceSecretKey)
+		//client.Debug = true
 
 		for _, coin := range account.getCoinsInBalance() {
 
 			orders, err := client.NewListOrdersService().Symbol(coin.Pair).
 				//StartTime(startTime). //EndTime(endTime).
-				Limit(50).Do(context.Background())
+				Do(context.Background())
 
 			CounterQueriesApiIncr()
 
@@ -762,7 +763,6 @@ func getOrdersAccounts() {
 				//jsonF, _ := json.Marshal(order)
 				//fmt.Println(string(jsonF))
 
-				price, _ := strconv.ParseFloat(order.Price, 64)
 				stopPrice, _ := strconv.ParseFloat(order.StopPrice, 64)
 				origQty, _ := strconv.ParseFloat(order.OrigQuantity, 64)
 				executedQty, _ := strconv.ParseFloat(order.ExecutedQuantity, 64)
@@ -779,7 +779,6 @@ func getOrdersAccounts() {
 					OrigQty:             origQty,
 					ExecutedQty:         executedQty,
 					CummulativeQuoteQty: cummulativeQuoteQuantity,
-					Price:               price,
 					StopPrice:           stopPrice,
 					IcebergQty:          icebergQuantity,
 					OrigQuoteOrderQty:   origQuoteOrderQuantity,
@@ -791,6 +790,12 @@ func getOrdersAccounts() {
 				newOrder.Status = newOrder.GetStatus(order.Status)
 				newOrder.Type = newOrder.GetType(order.Type)
 				newOrder.Side = newOrder.GetSide(order.Side)
+
+				price, _ := strconv.ParseFloat(order.Price, 64)
+				if price == 0.0 {
+					price = cummulativeQuoteQuantity / executedQty
+				}
+				newOrder.Price = price
 
 				_, err := dbConnect.Model(newOrder).
 					Where("order_id = ?order_id").

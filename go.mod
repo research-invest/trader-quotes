@@ -3,7 +3,7 @@ module go-trader
 go 1.17
 
 require (
-	github.com/adshao/go-binance/v2 v2.3.4
+	github.com/adshao/go-binance/v2 v2.3.5
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/go-pg/pg/extra/pgdebug v0.2.0
 	github.com/go-pg/pg/v10 v10.9.0
@@ -20,6 +20,7 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/go-pg/zerochecker v0.2.0 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/klauspost/compress v1.13.1 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
