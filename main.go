@@ -548,6 +548,12 @@ func getKlines() {
 		}
 
 		for _, kline := range klines {
+			volume, _ := strconv.ParseFloat(kline.Volume, 64)
+
+			if volume == 0 {
+				continue
+			}
+
 			open, _ := strconv.ParseFloat(kline.Open, 64)
 			high, _ := strconv.ParseFloat(kline.High, 64)
 			low, _ := strconv.ParseFloat(kline.Low, 64)
@@ -555,7 +561,6 @@ func getKlines() {
 			quoteAssetVolume, _ := strconv.ParseFloat(kline.QuoteAssetVolume, 64)
 			takerBuyBaseAssetVolume, _ := strconv.ParseFloat(kline.TakerBuyBaseAssetVolume, 64)
 			takerBuyQuoteAssetVolume, _ := strconv.ParseFloat(kline.TakerBuyQuoteAssetVolume, 64)
-			volume, _ := strconv.ParseFloat(kline.Volume, 64)
 
 			newKline := &Kline{
 				CoinPairId:               pair.CoinPairId,
