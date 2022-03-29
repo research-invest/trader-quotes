@@ -648,6 +648,8 @@ func getAccountsInfo() {
 			continue
 		}
 
+		balanceCoins := account.getCoinsInBalance()
+
 		var locked, free float64
 
 		for _, balance := range accountInfo.Balances {
@@ -664,7 +666,17 @@ func getAccountsInfo() {
 			}
 
 			if locked == 0 && free == 0 {
-				continue
+				isBalanceCoin := false
+				for _, coin := range balanceCoins {
+					if coin.Code == balance.Asset {
+						isBalanceCoin = true
+						break
+					}
+				}
+
+				if isBalanceCoin == false {
+					continue
+				}
 			}
 
 			coin := new(Coin)

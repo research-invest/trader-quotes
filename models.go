@@ -92,7 +92,7 @@ func (a *Account) getCoinsInBalance() []BalanceCoin {
 	var coins []BalanceCoin
 
 	_, err := dbConnect.Query(&coins, `
-SELECT c.id, c.code || cp.couple AS pair, cp.id AS pair_id
+SELECT c.id, c.code, c.code || cp.couple AS pair, cp.id AS pair_id
 FROM coins AS c
 INNER JOIN coins_pairs cp on c.id = cp.coin_id AND cp.is_enabled = 1
 WHERE c.id IN(
@@ -186,6 +186,7 @@ type Coin struct {
 type BalanceCoin struct {
 	Id     int64
 	Pair   string `pg:",pair,use_zero"`
+	Code   string
 	PairId int64
 }
 
