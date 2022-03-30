@@ -219,227 +219,9 @@ func telegramBot() {
 	}
 }
 
-func getBalanceInfo(accountId int64) string {
-	var balance []BalanceInfo
-	res, err := dbConnect.Query(&balance, `
-	
-WITH coins_last_prices AS (
-    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id,
-                                        c.id,
-                                        c.code,
-                                        c.rank,
-                                        k.low,
-                                        k.high
-    FROM klines AS k
-             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
-             INNER JOIN coins AS c ON c.id = cp.coin_id
-    WHERE cp.coin_id IN (
-        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
-    ) AND cp.couple = 'BUSD'
-      AND c.is_enabled = 1 AND cp.is_enabled = 1
-      AND k.close_time >= NOW() - INTERVAL '1 DAY'
-    ORDER BY k.coin_pair_id, k.close_time DESC
-), bal AS (
-    SELECT DISTINCT ON (b.coin_id) b.coin_id,
-                                   b.free,
-                                   b.locked
-    FROM balances AS b
-    WHERE b.coin_id IN (
-        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
-    )
-    ORDER BY b.coin_id, b.created_at DESC
-)
-
-SELECT clp.code, clp.rank,
-       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
-       ROUND(CAST(clp.high AS NUMERIC), 2)  AS price,
-       ROUND(CAST(((b.free +b.locked) * clp.high) AS NUMERIC), 2)  AS sum
-FROM bal AS b
-INNER JOIN coins_last_prices AS clp ON clp.id = b.coin_id
-UNION
-SELECT 'BUSD', 0,
-       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
-       1 AS price,
-       ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
-FROM bal AS b
-WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'BUSD')
-UNION
-SELECT 'USDT', 0,
-       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
-       1 AS price,
-       ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
-FROM bal AS b
-WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'USDT')
-ORDER BY sum DESC;
-	`, accountId, accountId)
-
-	if err != nil {
-		log.Warnf("can't get balance info: %v", err)
-		return err.Error()
-	}
-
-	if res.RowsAffected() == 0 {
-		return "Empty balance!"
-	}
-
-	tableString := &strings.Builder{}
-	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Rank", "Quantity", "Price", "Sum"})
-
-	var total float64
-	for _, item := range balance {
-		table.Append([]string{
-			item.Code,
-			IntToStr(item.Rank),
-			FloatToStr(item.Quantity),
-			FloatToStr(item.Price),
-			FloatToStr(item.Sum),
-		})
-
-		total = total + item.Sum
-	}
-
-	table.SetFooter([]string{"", "", "", "Total", fmt.Sprintf("$%.2f", total)})
-
-	table.Render()
-
-	return tableString.String()
-}
-
 func getCountKlines() int64 {
 	count, _ := dbConnect.Model((*Kline)(nil)).Count()
 	return int64(count)
-}
-
-func getActualExchangeRate(message string) (string, error) {
-	message = strings.ToUpper(strings.TrimSpace(message))
-
-	var rate PercentCoin
-
-	if !strings.Contains(message, "?") {
-		return "", errors.New("no correct coin")
-	}
-
-	coin := strings.Replace(message, "?", "", 100)
-
-	if len(coin) >= 10 {
-		return "", errors.New("no correct coin")
-	}
-
-	res, err := dbConnect.Query(&rate, `
-
-WITH coin_pairs_24_hours AS (
-    SELECT k.coin_pair_id, c.id as coin_id, c.code, k.open, k.close, k.high, k.low, k.close_time, k.open_time, c.rank
-    FROM klines AS k
-             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
-             INNER JOIN coins AS c ON c.id = cp.coin_id
-    WHERE cp.couple = 'BUSD'
-      AND c.is_enabled = 1
-      AND cp.is_enabled = 1
-      AND k.open_time >= NOW() - INTERVAL '1 DAY'
-      AND c.code = ?
-)
-
-SELECT DISTINCT ON (t.coin_id) t.coin_id,
-                               t.code,
-                               t.rank,
-                               minute10.percent AS minute10,
-                               hour.percent     AS hour,
-                               hour4.percent    AS hour4,
-                               hour12.percent   AS hour12,
-                               hour24.percent   AS hour24,
-                               minute10.min_open   AS minute10_min_open,
-                               minute10.max_close   AS minute10_max_close,
-                               hour.min_open   AS hour_min_open,
-                               hour.max_close   AS hour_max_close,
-                               hour4.min_open   AS hour4_min_open,
-                               hour4.max_close   AS hour4_max_close,
-                               hour12.min_open   AS hour12_min_open,
-                               hour12.max_close   AS hour12_max_close,
-                               hour24.min_open   AS hour24_min_open,
-                               hour24.max_close   AS hour24_max_close
-FROM coin_pairs_24_hours AS t
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           MIN(t.open) AS min_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
-    GROUP BY t.coin_pair_id
-) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           MIN(t.open) AS min_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
-    GROUP BY t.coin_pair_id
-) as hour ON t.coin_pair_id = hour.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           MIN(t.open) AS min_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
-    GROUP BY t.coin_pair_id
-) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           MIN(t.open) AS min_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-	WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
-    GROUP BY t.coin_pair_id
-) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
-         LEFT JOIN (
-    SELECT t.coin_pair_id,
-           MIN(t.open) AS min_open,
-           MAX(t.close) AS max_close,
-           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-    FROM coin_pairs_24_hours AS t
-    GROUP BY t.coin_pair_id
-) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
-`, coin)
-
-	if err != nil {
-		log.Panic("can't get get actual exchange rate: %v", err)
-		return "", err
-	}
-
-	if res.RowsAffected() == 0 {
-		return "", errors.New("coin not found")
-	}
-
-	tableString := &strings.Builder{}
-	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Value"})
-
-	table.Append([]string{"Coin id", IntToStr(int(rate.CoinId))})
-	table.Append([]string{"Coin", rate.Code})
-	table.Append([]string{"Rank", IntToStr(rate.Rank)})
-	table.Append([]string{"10 Minute", FloatToStr(rate.Minute10)})
-	table.Append([]string{"Hour", FloatToStr(rate.Hour)})
-	table.Append([]string{"4 Hour", FloatToStr(rate.Hour4)})
-	table.Append([]string{"12 Hour", FloatToStr(rate.Hour12)})
-	table.Append([]string{"24 Hour", FloatToStr(rate.Hour24)})
-	table.Append([]string{"10 Min open", FloatToStr(rate.Minute10MinOpen)})
-	table.Append([]string{"10 Max close", FloatToStr(rate.Minute10MaxClose)})
-	table.Append([]string{"Hour min open", FloatToStr(rate.HourMinOpen)})
-	table.Append([]string{"Hour max close", FloatToStr(rate.HourMaxClose)})
-	table.Append([]string{"4 Hour min open", FloatToStr(rate.Hour4MinOpen)})
-	table.Append([]string{"4 Hour max close", FloatToStr(rate.Hour4MaxClose)})
-	table.Append([]string{"12 Hour open", FloatToStr(rate.Hour12MinOpen)})
-	table.Append([]string{"12 Hour max close", FloatToStr(rate.Hour12MaxClose)})
-	table.Append([]string{"24 Hour min open", FloatToStr(rate.Hour24MinOpen)})
-	table.Append([]string{"24 Hour max close", FloatToStr(rate.Hour24MaxClose)})
-
-	table.Render()
-
-	return tableString.String(), nil
 }
 
 func getPairs(pairs *[]Pair) (err error) {
@@ -732,6 +514,93 @@ func getTimestampFromMilliseconds(milliseconds int64) time.Time {
 	return time.Unix(0, milliseconds*int64(time.Millisecond))
 }
 
+func getBalanceInfo(accountId int64) string {
+	var balance []BalanceInfo
+	res, err := dbConnect.Query(&balance, `
+	
+WITH coins_last_prices AS (
+    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id,
+                                        c.id,
+                                        c.code,
+                                        c.rank,
+                                        k.low,
+                                        k.high
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.coin_id IN (
+        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
+    ) AND cp.couple = 'BUSD'
+      AND c.is_enabled = 1 AND cp.is_enabled = 1
+      AND k.close_time >= NOW() - INTERVAL '1 DAY'
+    ORDER BY k.coin_pair_id, k.close_time DESC
+), bal AS (
+    SELECT DISTINCT ON (b.coin_id) b.coin_id,
+                                   b.free,
+                                   b.locked
+    FROM balances AS b
+    WHERE b.coin_id IN (
+        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
+    )
+    ORDER BY b.coin_id, b.created_at DESC
+)
+
+SELECT clp.code, clp.rank,
+       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
+       ROUND(CAST(clp.high AS NUMERIC), 2)  AS price,
+       ROUND(CAST(((b.free +b.locked) * clp.high) AS NUMERIC), 2)  AS sum
+FROM bal AS b
+INNER JOIN coins_last_prices AS clp ON clp.id = b.coin_id
+UNION
+SELECT 'BUSD', 0,
+       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
+       1 AS price,
+       ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
+FROM bal AS b
+WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'BUSD')
+UNION
+SELECT 'USDT', 0,
+       ROUND(CAST((b.free +b.locked) AS NUMERIC), 2) AS quantity,
+       1 AS price,
+       ROUND(CAST(((b.free +b.locked) * 1) AS NUMERIC), 2)  AS sum
+FROM bal AS b
+WHERE b.coin_id = (SELECT c.id FROM coins AS c WHERE c.code = 'USDT')
+ORDER BY sum DESC;
+	`, accountId, accountId)
+
+	if err != nil {
+		log.Warnf("can't get balance info: %v", err)
+		return err.Error()
+	}
+
+	if res.RowsAffected() == 0 {
+		return "Empty balance!"
+	}
+
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Rank", "Quantity", "Price", "Sum"})
+
+	var total float64
+	for _, item := range balance {
+		table.Append([]string{
+			item.Code,
+			IntToStr(item.Rank),
+			FloatToStr(item.Quantity),
+			FloatToStr(item.Price),
+			FloatToStr(item.Sum),
+		})
+
+		total = total + item.Sum
+	}
+
+	table.SetFooter([]string{"", "", "", "Total", fmt.Sprintf("$%.2f", total)})
+
+	table.Render()
+
+	return tableString.String()
+}
+
 func getOrdersAccounts() {
 
 	if getOrdersAccountsIsWorking == true {
@@ -842,6 +711,137 @@ func getOrdersAccounts() {
 
 }
 
+func getActualExchangeRate(message string) (string, error) {
+	message = strings.ToUpper(strings.TrimSpace(message))
+
+	var rate PercentCoin
+
+	if !strings.Contains(message, "?") {
+		return "", errors.New("no correct coin")
+	}
+
+	coin := strings.Replace(message, "?", "", 100)
+
+	if len(coin) >= 10 {
+		return "", errors.New("no correct coin")
+	}
+
+	res, err := dbConnect.Query(&rate, `
+
+WITH coin_pairs_24_hours AS (
+    SELECT k.coin_pair_id, c.id as coin_id, c.code, k.open, k.close, k.high, k.low, k.close_time, k.open_time, c.rank
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.couple = 'BUSD'
+      AND c.is_enabled = 1
+      AND cp.is_enabled = 1
+      AND k.open_time >= NOW() - INTERVAL '1 DAY'
+      AND c.code = ?
+)
+
+SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                               t.code,
+                               t.rank,
+                               minute10.percent AS minute10,
+                               hour.percent     AS hour,
+                               hour4.percent    AS hour4,
+                               hour12.percent   AS hour12,
+                               hour24.percent   AS hour24,
+                               minute10.min_open   AS minute10_min_open,
+                               minute10.max_close   AS minute10_max_close,
+                               hour.min_open   AS hour_min_open,
+                               hour.max_close   AS hour_max_close,
+                               hour4.min_open   AS hour4_min_open,
+                               hour4.max_close   AS hour4_max_close,
+                               hour12.min_open   AS hour12_min_open,
+                               hour12.max_close   AS hour12_max_close,
+                               hour24.min_open   AS hour24_min_open,
+                               hour24.max_close   AS hour24_max_close
+FROM coin_pairs_24_hours AS t
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MIN(t.open) AS min_open,
+           MAX(t.close) AS max_close,
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+    FROM coin_pairs_24_hours AS t
+	WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
+    GROUP BY t.coin_pair_id
+) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MIN(t.open) AS min_open,
+           MAX(t.close) AS max_close,
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+    FROM coin_pairs_24_hours AS t
+	WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
+    GROUP BY t.coin_pair_id
+) as hour ON t.coin_pair_id = hour.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MIN(t.open) AS min_open,
+           MAX(t.close) AS max_close,
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+    FROM coin_pairs_24_hours AS t
+	WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
+    GROUP BY t.coin_pair_id
+) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MIN(t.open) AS min_open,
+           MAX(t.close) AS max_close,
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+    FROM coin_pairs_24_hours AS t
+	WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
+    GROUP BY t.coin_pair_id
+) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+         LEFT JOIN (
+    SELECT t.coin_pair_id,
+           MIN(t.open) AS min_open,
+           MAX(t.close) AS max_close,
+           CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+    FROM coin_pairs_24_hours AS t
+    GROUP BY t.coin_pair_id
+) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+`, coin)
+
+	if err != nil {
+		log.Panic("can't get get actual exchange rate: %v", err)
+		return "", err
+	}
+
+	if res.RowsAffected() == 0 {
+		return "", errors.New("coin not found")
+	}
+
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Value"})
+
+	table.Append([]string{"Coin id", IntToStr(int(rate.CoinId))})
+	table.Append([]string{"Coin", rate.Code})
+	table.Append([]string{"Rank", IntToStr(rate.Rank)})
+	table.Append([]string{"10 Minute", FloatToStr(rate.Minute10)})
+	table.Append([]string{"Hour", FloatToStr(rate.Hour)})
+	table.Append([]string{"4 Hour", FloatToStr(rate.Hour4)})
+	table.Append([]string{"12 Hour", FloatToStr(rate.Hour12)})
+	table.Append([]string{"24 Hour", FloatToStr(rate.Hour24)})
+	table.Append([]string{"10 Min open", FloatToStr(rate.Minute10MinOpen)})
+	table.Append([]string{"10 Max close", FloatToStr(rate.Minute10MaxClose)})
+	table.Append([]string{"Hour min open", FloatToStr(rate.HourMinOpen)})
+	table.Append([]string{"Hour max close", FloatToStr(rate.HourMaxClose)})
+	table.Append([]string{"4 Hour min open", FloatToStr(rate.Hour4MinOpen)})
+	table.Append([]string{"4 Hour max close", FloatToStr(rate.Hour4MaxClose)})
+	table.Append([]string{"12 Hour open", FloatToStr(rate.Hour12MinOpen)})
+	table.Append([]string{"12 Hour max close", FloatToStr(rate.Hour12MaxClose)})
+	table.Append([]string{"24 Hour min open", FloatToStr(rate.Hour24MinOpen)})
+	table.Append([]string{"24 Hour max close", FloatToStr(rate.Hour24MaxClose)})
+
+	table.Render()
+
+	return tableString.String(), nil
+}
+
 func sendNotificationsAccounts() {
 
 	fmt.Println("Notifications orders accounts work")
@@ -940,11 +940,13 @@ WITH coin_pairs_24_hours AS (
       AND cp.is_enabled = 1
       AND k.open_time >= NOW() - INTERVAL '1 DAY'
     AND c.id IN (
-        SELECT DISTINCT ON (b.coin_id) b.coin_id
-        FROM balances AS b
-        WHERE account_id = ?
-          AND (b.free > 0 OR b.locked > 0)
-        ORDER BY b.coin_id, b.created_at DESC
+		SELECT t.coin_id FROM (
+			SELECT DISTINCT ON (b.coin_id) b.coin_id, b.free, b.locked
+			FROM balances AS b
+			WHERE account_id = ?
+			ORDER BY b.coin_id, b.created_at DESC
+		) AS t
+		WHERE t.free > 0 OR t.locked > 0
         )
     ORDER BY c.rank
 )

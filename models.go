@@ -97,11 +97,14 @@ SELECT c.id, c.code, c.code || cp.couple AS pair, cp.id AS pair_id
 FROM coins AS c
 INNER JOIN coins_pairs cp on c.id = cp.coin_id AND cp.is_enabled = 1
 WHERE c.id IN(
-    SELECT b.coin_id 
-    FROM balances AS b 
-	WHERE account_id = ? -- AND (b.free + b.locked) > 1
-    GROUP BY b.coin_id
-    )
+    SELECT t.coin_id FROM (
+		SELECT DISTINCT ON (b.coin_id) b.coin_id, b.free, b.locked
+		FROM balances AS b
+		WHERE account_id = ?
+		ORDER BY b.coin_id, b.created_at DESC
+    ) AS t
+    WHERE t.free > 0 OR t.locked > 0
+)
 AND c.is_enabled = 1;
 `, a.Id)
 
