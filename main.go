@@ -50,6 +50,7 @@ func main() {
 		for {
 			getAccountsInfo()
 			getOrdersAccounts()
+			sendNotificationsAccounts()
 			time.Sleep(30 * time.Minute)
 		}
 	}()
@@ -73,6 +74,28 @@ func main() {
 		}
 
 	}
+}
+
+func dbInit() {
+	dbConnect = *pg.Connect(&pg.Options{
+		Addr:     appConfig.Db.Host + ":" + strconv.Itoa(appConfig.Db.Port),
+		User:     appConfig.Db.User,
+		Password: appConfig.Db.Pass,
+		Database: appConfig.Db.Dbname,
+	})
+
+	ctx := context.Background()
+
+	_, err := dbConnect.ExecContext(ctx, "SELECT 1; SET timezone = 'UTC';")
+	if err != nil {
+		log.Warn(err)
+		panic(err)
+	}
+
+	dbConnect.AddQueryHook(pgdebug.DebugHook{
+		// Print all queries.
+		Verbose: false,
+	})
 }
 
 func setLogParam() {
@@ -419,28 +442,6 @@ FROM coin_pairs_24_hours AS t
 	return tableString.String(), nil
 }
 
-func dbInit() {
-	dbConnect = *pg.Connect(&pg.Options{
-		Addr:     appConfig.Db.Host + ":" + strconv.Itoa(appConfig.Db.Port),
-		User:     appConfig.Db.User,
-		Password: appConfig.Db.Pass,
-		Database: appConfig.Db.Dbname,
-	})
-
-	ctx := context.Background()
-
-	_, err := dbConnect.ExecContext(ctx, "SELECT 1; SET timezone = 'UTC';")
-	if err != nil {
-		log.Panic(err)
-		panic(err)
-	}
-
-	dbConnect.AddQueryHook(pgdebug.DebugHook{
-		// Print all queries.
-		Verbose: false,
-	})
-}
-
 func getPairs(pairs *[]Pair) (err error) {
 	_, err = dbConnect.Query(pairs, `
 	
@@ -489,7 +490,7 @@ ORDER BY t.rank;
 `)
 
 	if err != nil {
-		log.Panic("can't get pairs: %v", err)
+		log.Warn("can't get pairs: %v", err)
 		return err
 	}
 
@@ -508,7 +509,7 @@ func getKlines() {
 	err := getPairs(&pairs)
 
 	if err != nil {
-		panic(err)
+		return
 	}
 
 	countPairs := len(pairs)
@@ -751,7 +752,7 @@ func getOrdersAccounts() {
 
 	if err != nil {
 		log.Warnf("can't get accounts by get orders: %v", err)
-		panic(err)
+		return
 	}
 
 	for _, account := range accounts {
@@ -831,12 +832,198 @@ func getOrdersAccounts() {
 
 	//Activate coins by balance
 	_, err = dbConnect.Model((*Coin)(nil)).Exec(`
-	UPDATE coins AS c SET is_enabled = 1, interval = '5m' WHERE id IN(
+	UPDATE coins AS c SET is_enabled = 1, interval = '1m' WHERE id IN(
 		SELECT b.coin_id
 		FROM balances AS b
 		INNER JOIN coins_pairs cp on b.coin_id = cp.coin_id AND cp.is_enabled = 1
 		GROUP BY b.coin_id
-    ) AND c.interval <> '5m';
+    ) AND c.interval <> '1m';
 `)
 
+}
+
+func sendNotificationsAccounts() {
+
+	fmt.Println("Notifications orders accounts work")
+
+	var accounts []Account
+	err := dbConnect.Model(&accounts).
+		Where("account.is_enabled = ?", 1).
+		Where("binance_api_key IS NOT NULL AND binance_secret_key IS NOT NULL").
+		Select()
+
+	if err != nil {
+		log.Warnf("can't get accounts by get notificationsOrdersAccounts: %v", err)
+		return
+	}
+
+	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
+	if err != nil {
+		log.Warn(err)
+		return
+	}
+
+	bot.Debug = false //!!!!
+
+	for _, account := range accounts {
+
+		notificationsAccountsText := getNotificationsAccountsText(account.Id)
+
+		if notificationsAccountsText == "" {
+			continue
+		}
+
+		msg := tgbotapi.NewMessage(account.TelegramId, notificationsAccountsText)
+		if _, err := bot.Send(msg); err != nil {
+			if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // to const error text
+				err := account.disableAccount()
+				if err != nil {
+					log.Warnf("Error disable subscriber: %v", err)
+					continue
+				}
+			} else {
+				log.Error(err)
+			}
+		}
+	}
+
+}
+
+func getNotificationsAccountsText(accountId int64) string {
+
+	var coins []PercentCoinShort
+	err := getPercentCoinsByAccount(accountId, &coins)
+
+	if err != nil {
+		return "Возникла ошибка №435/1"
+	}
+
+	countCoins := len(coins)
+
+	if countCoins == 0 {
+		return ""
+	}
+
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h", "%"})
+	table.SetCaption(true, "Balance.")
+	for _, coin := range coins {
+		table.Append([]string{
+			coin.Code,
+			IntToStr(coin.Rank),
+			FloatToStr(coin.Minute10),
+			FloatToStr(coin.Hour),
+			FloatToStr(coin.Hour4),
+			FloatToStr(coin.Hour12),
+			FloatToStr(coin.Hour24),
+			FloatToStr(coin.PercentSum),
+		})
+	}
+
+	table.Render()
+
+	return tableString.String()
+}
+
+func getPercentCoinsByAccount(accountId int64, coins *[]PercentCoinShort) (err error) {
+	_, err = dbConnect.Query(coins, `
+
+WITH coin_pairs_24_hours AS (
+    SELECT k.coin_pair_id, c.id as coin_id, c.code, k.open,
+           k.close, k.high, k.low, k.open_time, k.close_time, c.rank
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.couple = 'BUSD'
+      AND c.is_enabled = 1
+      AND cp.is_enabled = 1
+      AND k.open_time >= NOW() - INTERVAL '1 DAY'
+    AND c.id IN (
+        SELECT DISTINCT ON (b.coin_id) b.coin_id
+        FROM balances AS b
+        WHERE account_id = ?
+          AND (b.free > 0 OR b.locked > 0)
+        ORDER BY b.coin_id, b.created_at DESC
+        )
+    ORDER BY c.rank
+)
+
+SELECT t.*
+
+FROM (
+         SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                                        t.code,
+                                        t.rank,
+                                        minute10.percent AS minute10,
+                                        hour.percent     AS hour,
+                                        hour4.percent    AS hour4,
+                                        hour12.percent   AS hour12,
+                                        hour24.percent   AS hour24,
+                                        ROUND(CAST(COALESCE(minute10.percent, 0) + COALESCE(hour.percent, 0) + COALESCE(hour4.percent, 0) + COALESCE(hour12.percent, 0) + COALESCE(hour24.percent, 12) AS NUMERIC), 3) AS percent_sum
+         FROM coin_pairs_24_hours AS t
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    MIN(t.open)                             AS min_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
+                OR (t.open_time <= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE') AND
+                    t.close_time >= NOW())
+             GROUP BY t.coin_pair_id
+         ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    MIN(t.open)                             AS min_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
+             GROUP BY t.coin_pair_id
+         ) as hour ON t.coin_pair_id = hour.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    MIN(t.open)                             AS min_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
+             GROUP BY t.coin_pair_id
+         ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    MIN(t.open)                             AS min_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
+             GROUP BY t.coin_pair_id
+         ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+                  LEFT JOIN (
+             SELECT t.coin_pair_id,
+                    MIN(t.open)                             AS min_open,
+                    MAX(t.close)                            AS max_close,
+                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
+             FROM coin_pairs_24_hours AS t
+             GROUP BY t.coin_pair_id
+         ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+--          WHERE (
+--                        (minute10.percent >= 2 OR minute10.percent <= -2)
+--                        OR (hour.percent >= 3 OR hour.percent <= -3)
+--                        OR (hour4.percent >= 4 OR hour4.percent <= -4)
+--                        OR (hour12.percent >= 8 OR hour12.percent <= -8)
+--                        OR (hour24.percent >= 10 OR hour24.percent <= -10))
+         ORDER BY t.coin_id
+         LIMIT 45
+     ) AS t
+ORDER BY percent_sum DESC;
+`, accountId)
+
+	if err != nil {
+		log.Error("can't get percent pairs by accounts: %v", err)
+		return err
+	}
+
+	return nil
 }

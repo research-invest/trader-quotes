@@ -46,8 +46,9 @@ func (a *Account) addNew(data *tgbotapi.Chat) (acc *Account, err error) {
 
 	_, err = dbConnect.Model(newAccount).
 		Where("telegram_id = ?telegram_id").
-		OnConflict("DO NOTHING").
-		SelectOrInsert()
+		OnConflict("(telegram_id) DO UPDATE").
+		Set("is_enabled = ?is_enabled").
+		Insert()
 
 	return newAccount, err
 }
@@ -209,6 +210,18 @@ type PercentCoin struct {
 	Hour12MaxClose   float64
 	Hour24MinOpen    float64
 	Hour24MaxClose   float64
+}
+
+type PercentCoinShort struct {
+	CoinId     int64
+	Rank       int
+	Code       string
+	Minute10   float64
+	Hour       float64
+	Hour4      float64
+	Hour12     float64
+	Hour24     float64
+	PercentSum float64
 }
 
 type BalanceInfo struct {
