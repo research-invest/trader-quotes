@@ -540,7 +540,13 @@ WITH coins_last_prices AS (
                                    b.locked
     FROM balances AS b
     WHERE b.coin_id IN (
-        SELECT DISTINCT ON (coin_id) coin_id FROM balances WHERE account_id = ?
+		SELECT t.coin_id FROM (
+			SELECT DISTINCT ON (b.coin_id) b.coin_id, b.free, b.locked
+			FROM balances AS b
+			WHERE account_id = ?
+			ORDER BY b.coin_id, b.created_at DESC
+		) AS t
+		WHERE t.free > 0 OR t.locked > 0
     )
     ORDER BY b.coin_id, b.created_at DESC
 )
