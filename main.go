@@ -143,14 +143,15 @@ func telegramBot() {
 		if update.Message.IsCommand() { // ignore any non-command Messages
 
 			/*
-				setapikey - Set binance api key read only
-				setsecretkey - Set binance secret key read only
+				getbalance - Get balance info
+				syncbalance - Sync balance info
+				getavgprices - Get avg prices coins
 				getcountqueriesapi - Get count queries api
 				getcountqueriesapierror - Get count queries api error
 				getcountklines - Get count klines
 				status - Status service
-				getbalance - Get balance info
-				syncbalance - Sync balance info
+				setapikey - Set binance api key read only
+				setsecretkey - Set binance secret key read only
 			*/
 
 			// Extract the command from the Message.
@@ -188,6 +189,8 @@ func telegramBot() {
 				msg.Text = "I'm ok."
 			case "getbalance":
 				msg.Text = getBalanceInfo(account.Id)
+			case "getavgprices":
+				msg.Text = getAvgPrices(account.Id)
 			case "syncbalance":
 				getAccountsInfo()
 				getOrdersAccounts()
@@ -614,6 +617,96 @@ ORDER BY sum DESC;
 	return tableString.String()
 }
 
+func getAvgPrices(accountId int64) string {
+	var avgPrices []AvgPrice
+	res, err := dbConnect.Query(&avgPrices, `
+
+WITH coins_last_prices AS (
+    SELECT DISTINCT ON (k.coin_pair_id) k.coin_pair_id,
+                                        c.id,
+                                        c.code,
+                                        c.rank,
+                                        k.low,
+                                        k.high
+    FROM klines AS k
+             INNER JOIN coins_pairs AS cp ON cp.id = k.coin_pair_id
+             INNER JOIN coins AS c ON c.id = cp.coin_id
+    WHERE cp.coin_id IN (
+        SELECT t.coin_id
+        FROM (
+                 SELECT DISTINCT ON (b.coin_id) b.coin_id, b.free, b.locked
+                 FROM balances AS b
+                 WHERE account_id = ?
+                 ORDER BY b.coin_id, b.created_at DESC
+             ) AS t
+        WHERE t.free > 0
+           OR t.locked > 0
+    )
+      AND cp.couple = 'BUSD'
+      AND c.is_enabled = 1
+      AND cp.is_enabled = 1
+      AND k.close_time >= NOW() - INTERVAL '4 HOUR'
+    ORDER BY k.coin_pair_id, k.close_time DESC
+)
+
+SELECT t.id, t.code, clp.high AS price, (buy - sell) / (qty_buy - qty_sell) AS avg_price
+FROM (
+         SELECT sum(cummulative_quote_qty) FILTER (WHERE side = 1) AS buy,
+                sum(cummulative_quote_qty) FILTER (WHERE side = 2) AS sell,
+                sum(orig_qty) FILTER (WHERE side = 1)              AS qty_buy,
+                sum(orig_qty) FILTER (WHERE side = 2)              AS qty_sell,
+                c.id,
+                c.code
+         FROM orders AS o
+                  INNER JOIN coins_pairs cp on cp.id = o.coin_pair_id
+                  INNER JOIN coins c on c.id = cp.coin_id
+         WHERE status = 3
+           AND account_id = 1
+           AND c.id IN (
+             SELECT t.coin_id
+             FROM (
+                      SELECT DISTINCT ON (b.coin_id) b.coin_id, b.free, b.locked
+                      FROM balances AS b
+                      WHERE account_id = ?
+                      ORDER BY b.coin_id, b.created_at DESC
+                  ) AS t
+             WHERE t.free > 0
+                OR t.locked > 0
+         )
+         GROUP BY c.id
+     ) AS t
+         LEFT JOIN coins_last_prices AS clp ON clp.id = t.id
+--ORDER BY created_at ASC
+;
+	`, accountId, accountId)
+
+	if err != nil {
+		log.Warnf("can't get avgPrices info: %v", err)
+		return err.Error()
+	}
+
+	if res.RowsAffected() == 0 {
+		return "Empty avgPrices!"
+	}
+
+	tableString := &strings.Builder{}
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader([]string{"Id", "Coin", "Price", "AvgPrice"})
+
+	for _, item := range avgPrices {
+		table.Append([]string{
+			IntToStr(int(item.Id)),
+			item.Code,
+			FloatToStr(item.Price),
+			FloatToStr(item.AvgPrice),
+		})
+	}
+
+	table.Render()
+
+	return tableString.String()
+}
+
 func getOrdersAccounts() {
 
 	if getOrdersAccountsIsWorking == true {
@@ -899,7 +992,6 @@ func sendNotificationsAccounts() {
 			}
 		}
 	}
-
 }
 
 func getNotificationsAccountsText(accountId int64) string {

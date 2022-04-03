@@ -234,3 +234,10 @@ type BalanceInfo struct {
 	Price    float64
 	Sum      float64
 }
+
+type AvgPrice struct {
+	Id       int64
+	Code     string
+	Price    float64
+	AvgPrice float64
+}
