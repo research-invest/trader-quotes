@@ -370,7 +370,7 @@ func getKlines() {
 				_, err = dbConnect.Model(newKline).Insert()
 			} else {
 				_, err = dbConnect.Model(newKline).
-					Where("coin_pair_id = ?coin_pair_id AND open_time > ?open_time").
+					Where("coin_pair_id = ?coin_pair_id AND open_time = ?open_time").
 					Update()
 			}
 
