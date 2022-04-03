@@ -312,7 +312,7 @@ func getKlines() {
 	for _, pair := range pairs {
 
 		klines, err := client.NewKlinesService().Symbol(strings.ToUpper(pair.Pair)).
-			Interval(pair.Interval).Limit(20).Do(context.Background())
+			Interval(pair.Interval).Limit(100).Do(context.Background())
 
 		CounterQueriesApiIncr()
 
@@ -362,10 +362,17 @@ func getKlines() {
 				RatioHighLow:             high / low,
 			}
 
-			_, err := dbConnect.Model(newKline).
+			count, err := dbConnect.Model(newKline).
 				Where("coin_pair_id = ?coin_pair_id AND open_time > ?open_time").
-				OnConflict("DO NOTHING").
-				SelectOrInsert()
+				Count()
+
+			if count == 0 {
+				_, err = dbConnect.Model(newKline).Insert()
+			} else {
+				_, err = dbConnect.Model(newKline).
+					Where("coin_pair_id = ?coin_pair_id AND open_time > ?open_time").
+					Update()
+			}
 
 			if err != nil {
 				log.Warnf("add newKline error: %v, cpid: %v, open_time: %v\n", err.Error(), newKline.CoinPairId, newKline.OpenTime)
