@@ -143,7 +143,7 @@ func telegramBot() {
 		}
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
-
+		msg.ParseMode = "MarkdownV2"
 		if update.Message.IsCommand() { // ignore any non-command Messages
 
 			/*
@@ -192,9 +192,9 @@ func telegramBot() {
 			case "status":
 				msg.Text = "I'm ok."
 			case "getbalance":
-				msg.Text = getBalanceInfo(account.Id)
+				msg.Text = "```" + getBalanceInfo(account.Id) + "```"
 			case "getavgprices":
-				msg.Text = getAvgPrices(account.Id)
+				msg.Text = "```" + getAvgPrices(account.Id) + "```"
 			case "syncbalance":
 				getAccountsInfo()
 				getOrdersAccounts()
@@ -213,7 +213,7 @@ func telegramBot() {
 		rate, err := getActualExchangeRate(update.Message.Text)
 
 		if err == nil {
-			msg.Text = rate
+			msg.Text = "```" + rate + "```"
 			if _, err := bot.Send(msg); err != nil {
 				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
 			}
@@ -982,8 +982,9 @@ func sendNotificationsAccounts() {
 		if notificationsAccountsText == "" {
 			continue
 		}
+		msg := tgbotapi.NewMessage(account.TelegramId, "```"+notificationsAccountsText+"```")
+		msg.ParseMode = "MarkdownV2"
 
-		msg := tgbotapi.NewMessage(account.TelegramId, notificationsAccountsText)
 		if _, err := bot.Send(msg); err != nil {
 			if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // to const error text
 				err := account.disableAccount()
