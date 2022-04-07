@@ -5,6 +5,7 @@ package main
 //https://api.binance.com/api/v3/klines?interval=1m&limit=20&symbol=AVAXBUSD
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
+	"github.com/wcharczuk/go-chart"
+	"github.com/wcharczuk/go-chart/drawing"
 	"go-trader/models"
 	"os"
 	"strconv"
@@ -42,38 +45,39 @@ func main() {
 		}
 	}()
 
-	go func() {
-		telegramBot()
-	}()
+	//go func() {
+	//	telegramBot()
+	//}()
+	//
+	//go func() {
+	//	for {
+	//		getAccountsInfo()
+	//		getOrdersAccounts()
+	//		sendNotificationsAccounts()
+	//		time.Sleep(30 * time.Minute)
+	//	}
+	//}()
 
-	go func() {
-		for {
-			getAccountsInfo()
-			getOrdersAccounts()
-			sendNotificationsAccounts()
-			time.Sleep(30 * time.Minute)
-		}
-	}()
+	testSendImages()
 
 	//getAccountsInfo()
 
-	for {
-		t := time.Now()
-
-		if t.Hour() >= 3 && t.Hour() < 6 {
-			time.Sleep(1 * time.Hour) // temp
-		}
-
-		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
-			CounterQueriesApiSetZero()
-		}
-
-		if t.Second() == 0 {
-			getKlines()
-			time.Sleep(1 * time.Minute)
-		}
-
-	}
+	//for {
+	//	t := time.Now()
+	//
+	//	if t.Hour() >= 3 && t.Hour() < 6 {
+	//		time.Sleep(1 * time.Hour) // temp
+	//	}
+	//
+	//	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+	//		CounterQueriesApiSetZero()
+	//	}
+	//
+	//	if t.Second() == 0 {
+	//		getKlines()
+	//		time.Sleep(1 * time.Minute)
+	//	}
+	//}
 }
 
 func dbInit() {
@@ -1133,4 +1137,425 @@ ORDER BY percent_sum DESC;
 	}
 
 	return nil
+}
+
+func testSendImages() {
+
+	fmt.Println("Notifications orders accounts work")
+
+	var accounts []Account
+	err := dbConnect.Model(&accounts).
+		Where("account.is_enabled = ?", 1).
+		Where("binance_api_key IS NOT NULL AND binance_secret_key IS NOT NULL").
+		Select()
+
+	if err != nil {
+		log.Warnf("can't get accounts by get notificationsOrdersAccounts: %v", err)
+		return
+	}
+
+	bot, err := tgbotapi.NewBotAPI(appConfig.TelegramBot)
+	if err != nil {
+		log.Warn(err)
+		return
+	}
+
+	bot.Debug = false //!!!!
+
+	chart.DefaultBackgroundColor = chart.ColorTransparent
+	chart.DefaultCanvasColor = chart.ColorTransparent
+
+	barWidth := 120
+
+	var (
+		colorWhite          = drawing.Color{R: 241, G: 241, B: 241, A: 255}
+		colorMariner        = drawing.Color{R: 60, G: 100, B: 148, A: 255}
+		colorLightSteelBlue = drawing.Color{R: 182, G: 195, B: 220, A: 255}
+		colorPoloBlue       = drawing.Color{R: 126, G: 155, B: 200, A: 255}
+		colorSteelBlue      = drawing.Color{R: 73, G: 120, B: 177, A: 255}
+	)
+
+	stackedBarChart := chart.StackedBarChart{
+		Title:      "Quarterly Sales",
+		TitleStyle: chart.StyleShow(),
+		Background: chart.Style{
+			Padding: chart.Box{
+				Top: 100,
+			},
+		},
+		//Width:      810,
+		//Height:     500,
+		XAxis:      chart.StyleShow(),
+		YAxis:      chart.StyleShow(),
+		BarSpacing: 10,
+		Bars: []chart.StackedBar{
+			{
+				Name:  "Q1",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "32K",
+						Value: 32,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "46K",
+						Value: 46,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "48K",
+						Value: 48,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "42K",
+						Value: 42,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q2",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "45K",
+						Value: 45,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "60K",
+						Value: 60,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "62K",
+						Value: 62,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "53K",
+						Value: 53,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q3",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "54K",
+						Value: 54,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "58K",
+						Value: 58,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "55K",
+						Value: 55,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "47K",
+						Value: 47,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q4",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "46K",
+						Value: 46,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "70K",
+						Value: 70,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "74K",
+						Value: 74,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "60K",
+						Value: 60,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q1",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "32K",
+						Value: 32,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "46K",
+						Value: 46,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "48K",
+						Value: 48,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "42K",
+						Value: 42,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q2",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "45K",
+						Value: 45,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "60K",
+						Value: 60,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "62K",
+						Value: 62,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "53K",
+						Value: 53,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q3",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "54K",
+						Value: 54,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "58K",
+						Value: 58,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "55K",
+						Value: 55,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "47K",
+						Value: 47,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+			{
+				Name:  "Q4",
+				Width: barWidth,
+				Values: []chart.Value{
+					{
+						Label: "46K",
+						Value: 46,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorMariner,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "70K",
+						Value: 70,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorLightSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "74K",
+						Value: 74,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorPoloBlue,
+							FontColor:   colorWhite,
+						},
+					},
+					{
+						Label: "60K",
+						Value: 60,
+						Style: chart.Style{
+							StrokeWidth: .01,
+							FillColor:   colorSteelBlue,
+							FontColor:   colorWhite,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	buffer := bytes.NewBuffer([]byte{})
+	err = stackedBarChart.Render(chart.PNG, buffer)
+
+	for _, account := range accounts {
+
+		photoFileBytes := tgbotapi.FileBytes{
+			Name:  "picture",
+			Bytes: buffer.Bytes(),
+		}
+		_, _ = bot.Send(tgbotapi.NewPhotoUpload(account.TelegramId, photoFileBytes))
+
+		//notificationsAccountsText := getNotificationsAccountsText(account.Id)
+		//
+		//if notificationsAccountsText == "" {
+		//	continue
+		//}
+		//
+		//msg := tgbotapi.NewMessage(account.TelegramId, notificationsAccountsText)
+		//if _, err := bot.Send(msg); err != nil {
+		//	if strings.Contains(err.Error(), "Forbidden: bot was blocked by the user") { // to const error text
+		//		err := account.disableAccount()
+		//		if err != nil {
+		//			log.Warnf("Error disable subscriber: %v", err)
+		//			continue
+		//		}
+		//	} else {
+		//		log.Error(err)
+		//	}
+		//}
+	}
 }
