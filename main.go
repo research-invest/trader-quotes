@@ -315,7 +315,7 @@ func getKlines() {
 	for _, pair := range pairs {
 
 		klines, err := client.NewKlinesService().Symbol(strings.ToUpper(pair.Pair)).
-			Interval(pair.Interval).Limit(100).Do(context.Background())
+			Interval(pair.Interval).Do(context.Background())
 
 		CounterQueriesApiIncr()
 
@@ -366,7 +366,7 @@ func getKlines() {
 			}
 
 			count, err := dbConnect.Model(newKline).
-				Where("coin_pair_id = ?coin_pair_id AND open_time > ?open_time").
+				Where("coin_pair_id = ?coin_pair_id AND open_time = ?open_time").
 				Count()
 
 			if count == 0 {
@@ -1012,18 +1012,16 @@ func getNotificationsAccountsText(accountId int64) string {
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h", "%"})
+	table.SetHeader([]string{"Name", "10m", "1h", "4h", "12h", "24h"})
 	table.SetCaption(true, "Balance.")
 	for _, coin := range coins {
 		table.Append([]string{
-			coin.Code,
-			IntToStr(coin.Rank),
+			coin.Code + "[" + IntToStr(coin.Rank) + "]",
 			FloatToStr(coin.Minute10),
 			FloatToStr(coin.Hour),
 			FloatToStr(coin.Hour4),
 			FloatToStr(coin.Hour12),
 			FloatToStr(coin.Hour24),
-			FloatToStr(coin.PercentSum),
 		})
 	}
 
