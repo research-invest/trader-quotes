@@ -1,6 +1,6 @@
 package main
 
-//GOOS=linux GOARCH=amd64 go build -o ./trader -a
+//GOOS=linux GOARCH=amd64 go build -o ./quotes -a
 
 //https://api.binance.com/api/v3/klines?interval=1m&limit=20&symbol=AVAXBUSD
 
@@ -351,7 +351,7 @@ func getKlines() {
 			newKline := &Kline{
 				CoinPairId:               pair.CoinPairId,
 				OpenTime:                 getTimestampFromMilliseconds(kline.OpenTime),
-				CloseTime:                getTimestampFromMilliseconds(kline.CloseTime),
+				CloseTime:                getTimestampFromMilliseconds(kline.CloseTime - 1000),
 				Open:                     open,
 				High:                     high,
 				Low:                      low,
