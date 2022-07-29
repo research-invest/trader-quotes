@@ -64,7 +64,7 @@ func main() {
 			time.Sleep(1 * time.Hour) // temp
 		}
 
-		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+		if t.Hour() == 0 && t.Minute() == 0 {
 			CounterQueriesApiSetZero()
 		}
 
