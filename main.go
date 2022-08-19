@@ -1108,73 +1108,85 @@ WITH coin_pairs_24_hours AS (
     ORDER BY c.rank
 )
 
-SELECT t.*
-
+SELECT *
 FROM (
-         SELECT DISTINCT ON (t.coin_id) t.coin_id,
-                                        t.code,
-                                        t.rank,
-                                        minute10.percent AS minute10,
-                                        hour.percent     AS hour,
-                                        hour4.percent    AS hour4,
-                                        hour12.percent   AS hour12,
-                                        hour24.percent   AS hour24,
-                                        ROUND(CAST(COALESCE(minute10.percent, 0) + COALESCE(hour.percent, 0) + COALESCE(hour4.percent, 0) + COALESCE(hour12.percent, 0) + COALESCE(hour24.percent, 12) AS NUMERIC), 3) AS percent_sum
-         FROM coin_pairs_24_hours AS t
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
-                OR (t.open_time <= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE') AND
-                    t.close_time >= NOW())
-             GROUP BY t.coin_pair_id
-         ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
-             GROUP BY t.coin_pair_id
-         ) as hour ON t.coin_pair_id = hour.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
-             GROUP BY t.coin_pair_id
-         ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
-             GROUP BY t.coin_pair_id
-         ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             GROUP BY t.coin_pair_id
-         ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
---          WHERE (
---                        (minute10.percent >= 2 OR minute10.percent <= -2)
---                        OR (hour.percent >= 3 OR hour.percent <= -3)
---                        OR (hour4.percent >= 4 OR hour4.percent <= -4)
---                        OR (hour12.percent >= 8 OR hour12.percent <= -8)
---                        OR (hour24.percent >= 10 OR hour24.percent <= -10))
-         ORDER BY t.coin_id
-         LIMIT 45
+         SELECT t.*,
+                ROUND(CAST((COALESCE(t.minute10, 0) + COALESCE(t.hour, 0) +
+                            COALESCE(t.hour4, 0) + COALESCE(t.hour12, 0) +
+                            COALESCE(t.hour24, 0)) AS NUMERIC), 3) AS percent_sum
+         FROM (
+
+                           SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                                                          t.code,
+                                                          t.rank,
+                                                          CAlC_PERCENT(MIN(COALESCE(minute10.first_open, 0)), MIN(COALESCE(minute10.last_close, 0))) AS minute10,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour.first_open, 0)), MIN(COALESCE(hour.last_close, 0)))         AS hour,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour4.first_open, 0)), MIN(COALESCE(hour4.last_close, 0)))       AS hour4,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour12.first_open, 0)), MIN(COALESCE(hour12.last_close, 0)))     AS hour12,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour24.first_open, 0)), MIN(COALESCE(hour24.last_close, 0)))     AS hour24
+
+                           FROM coin_pairs_24_hours AS t
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
+                                  OR (t.open_time <= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE') AND
+                                      t.close_time >= NOW())
+                               GROUP BY t.coin_pair_id
+                           ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
+                               GROUP BY t.coin_pair_id
+                           ) as hour ON t.coin_pair_id = hour.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
+                               GROUP BY t.coin_pair_id
+                           ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
+                               GROUP BY t.coin_pair_id
+                           ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               GROUP BY t.coin_pair_id
+                           ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+                           GROUP BY t.coin_id, t.code, t.rank
+                           ORDER BY t.coin_id
+                           LIMIT 45
+                       ) AS t
+                        WHERE (
+                                (t.minute10 >= 2 OR t.minute10 <= -2)
+                                OR (t.hour >= 3 OR t.hour <= -3)
+                                OR (t.hour4 >= 4 OR t.hour4 <= -4)
+                                OR (t.hour12 >= 8 OR t.hour12 <= -8)
+                                OR (t.hour24 >= 10 OR t.hour24 <= -10))
      ) AS t
 ORDER BY percent_sum DESC;
 `, accountId)
