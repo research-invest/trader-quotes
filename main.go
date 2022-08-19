@@ -288,7 +288,7 @@ WITH coin_pairs_close_time AS (
     FROM klines AS k
     INNER JOIN coins_pairs cp on cp.id = k.coin_pair_id
     INNER JOIN coins c on c.id = cp.coin_id
-    WHERE cp.is_enabled = 1 AND c.is_enabled = 1
+    WHERE cp.is_enabled = 1 AND c.is_enabled = 1 AND k.close_time >= NOW() - INTERVAL '30 DAYS'
     ORDER BY k.coin_pair_id, k.close_time DESC
 )
 
