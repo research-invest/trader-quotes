@@ -12,7 +12,7 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/go-pg/pg/extra/pgdebug"
 	"github.com/go-pg/pg/v10"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 	"go-trader/models"
@@ -168,6 +168,19 @@ func telegramBot() {
 		log.Panic(err)
 	}
 
+	var replyMarkup = tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Баланс"),
+			tgbotapi.NewKeyboardButton("Средняя цена"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Статус"),
+			tgbotapi.NewKeyboardButton("Получить кол-во апи запросов"),
+			tgbotapi.NewKeyboardButton("Кол-во свечей 🕯"),
+			tgbotapi.NewKeyboardButton("Синхронизировать балансы"),
+		),
+	)
+
 	bot.Debug = false
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -175,7 +188,7 @@ func telegramBot() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates, _ := bot.GetUpdatesChan(u)
+	updates := bot.GetUpdatesChan(u)
 
 	for update := range updates {
 		if update.Message == nil { // ignore any non-Message updates
@@ -193,71 +206,73 @@ func telegramBot() {
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 		msg.ParseMode = "MarkdownV2"
-		if update.Message.IsCommand() { // ignore any non-command Messages
+		msg.ReplyMarkup = replyMarkup
 
-			/*
-				getbalance - Get balance info
-				syncbalance - Sync balance info
-				getavgprices - Get avg prices coins
-				getcountqueriesapi - Get count queries api
-				getcountqueriesapierror - Get count queries api error
-				getcountklines - Get count klines
-				status - Status service
-				setapikey - Set binance api key read only
-				setsecretkey - Set binance secret key read only
-			*/
+		//if update.Message.IsCommand() { // ignore any non-command Messages
 
-			// Extract the command from the Message.
-			switch update.Message.Command() {
-			case "setapikey":
-				apiKey := strings.Replace(update.Message.Text, "/setapikey", "", 1)
-				err := account.saveApiKey(apiKey)
-				if err != nil {
-					msg.Text = "No correct api key"
-					log.Warnf("can't save api key account: %v", err)
-					//break
-				} else {
-					msg.Text = "Api key saved."
-					//break
-				}
-			case "setsecretkey":
-				secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
-				err := account.saveSecretKey(secretKey)
-				if err != nil {
-					msg.Text = "No correct secret key"
-					log.Warnf("can't save secret key account: %v", err)
-					//break
-				} else {
-					msg.Text = "Api secret key saved."
-					//break
-				}
+		/*
+			getbalance - Get balance info
+			syncbalance - Sync balance info
+			getavgprices - Get avg prices coins
+			getcountqueriesapi - Get count queries api
+			getcountqueriesapierror - Get count queries api error
+			getcountklines - Get count klines
+			status - Status service
+			setapikey - Set binance api key read only
+			setsecretkey - Set binance secret key read only
+		*/
 
-			case "getcountqueriesapi":
-				msg.Text = "Count query api: " + getCountQueriesApi()
-			case "getcountqueriesapierror":
-				msg.Text = "Count query api errors: " + getCountQueriesApiError()
-			case "getcountklines":
-				msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
-			case "status":
-				msg.Text = "I'm ok."
-			case "getbalance":
-				msg.Text = "```" + getBalanceInfo(account.Id) + "```"
-			case "getavgprices":
-				msg.Text = "```" + getAvgPrices(account.Id) + "```"
-			case "syncbalance":
-				getAccountsInfo()
-				getOrdersAccounts()
-				msg.Text = "sync"
-			default:
-				msg.Text = "I don't know that command"
+		// Extract the command from the Message.
+		switch update.Message.Text {
+		case "setapikey":
+			apiKey := strings.Replace(update.Message.Text, "/setapikey", "", 1)
+			err := account.saveApiKey(apiKey)
+			if err != nil {
+				msg.Text = "No correct api key"
+				log.Warnf("can't save api key account: %v", err)
+				//break
+			} else {
+				msg.Text = "Api key saved."
+				//break
+			}
+		case "setsecretkey":
+			secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
+			err := account.saveSecretKey(secretKey)
+			if err != nil {
+				msg.Text = "No correct secret key"
+				log.Warnf("can't save secret key account: %v", err)
+				//break
+			} else {
+				msg.Text = "Api secret key saved."
+				//break
 			}
 
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf("can't send bot message: %v", err)
-			}
-
-			continue
+		case "Получить кол-во апи запросов":
+			msg.Text = "Count query api: " + getCountQueriesApi()
+		case "getcountqueriesapierror":
+			msg.Text = "Count query api errors: " + getCountQueriesApiError()
+		case "Кол-во свечей 🕯":
+			msg.Text = "Кол-во свечей: " + strconv.FormatInt(getCountKlines(), 10)
+		case "Статус":
+			msg.Text = "Все нормально, 😉 работаем"
+		case "Баланс":
+			msg.Text = "```" + getBalanceInfo(account.Id) + "```"
+		case "Средняя цена":
+			msg.Text = "```" + getAvgPrices(account.Id) + "```"
+		case "Синхронизировать балансы":
+			getAccountsInfo()
+			getOrdersAccounts()
+			msg.Text = "sync"
+		default:
+			msg.Text = "I don't know that command"
 		}
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Warnf("can't send bot message: %v", err)
+		}
+
+		continue
+		//}
 
 		rate, err := getActualExchangeRate(update.Message.Text)
 
