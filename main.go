@@ -76,6 +76,59 @@ func main() {
 	}
 }
 
+//func wsTest() {
+//
+//	wsDepthHandler := func(event *binance.WsDepthEvent) {
+//		jsonF, _ := json.Marshal(event)
+//		fmt.Println(string(jsonF))
+//		fmt.Println("string(jsonF))")
+//	}
+//	errHandler := func(err error) {
+//		fmt.Println(err)
+//	}
+//	doneC, stopC, err := binance.WsDepthServe("BTCBUSD", wsDepthHandler, errHandler)
+//	if err != nil {
+//		fmt.Println(err)
+//		return
+//	}
+//	// use stopC to exit
+//	go func() {
+//		time.Sleep(5 * time.Second)
+//		stopC <- struct{}{}
+//	}()
+//	// remove this if you do not want to be blocked here
+//	<-doneC
+//
+//	//wsAggTradeHandler := func(event *binance.WsAggTradeEvent) {
+//	//	jsonF, _ := json.Marshal(event)
+//	//	fmt.Println(string(jsonF))
+//	//}
+//	//errHandler := func(err error) {
+//	//	fmt.Println(err)
+//	//}
+//	//doneC, _, err := binance.WsAggTradeServe("LTCBTC", wsAggTradeHandler, errHandler)
+//	//if err != nil {
+//	//	fmt.Println(err)
+//	//	return
+//	//}
+//	//<-doneC
+//
+//	return
+//	//wsKlineHandler := func(event *binance.WsKlineEvent) {
+//	//jsonF, _ := json.Marshal(event)
+//	//fmt.Println(string(jsonF))
+//	//}
+//	//errHandler := func(err error) {
+//	//	fmt.Println(err)
+//	//}
+//	//doneC, _, err := binance.WsKlineServe("BTCBUSD", "1m", wsKlineHandler, errHandler)
+//	//if err != nil {
+//	//	fmt.Println(err)
+//	//	return
+//	//}
+//	//<-doneC
+//}
+
 func dbInit() {
 	dbConnect = *pg.Connect(&pg.Options{
 		Addr:     appConfig.Db.Host + ":" + strconv.Itoa(appConfig.Db.Port),
