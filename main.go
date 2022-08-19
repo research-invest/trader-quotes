@@ -53,13 +53,13 @@ func main() {
 		for {
 			getAccountsInfo()
 			getOrdersAccounts()
-			sendCoinGraph()
+			sendBtcGraph(0)
 			sendNotificationsAccounts()
 			time.Sleep(30 * time.Minute)
 		}
 	}()
 
-	//sendCoinGraph()
+	//sendBtcGraph(0)
 	//getAccountsInfo()
 
 	for {
@@ -174,6 +174,7 @@ func telegramBot() {
 
 	var replyMarkup = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Btc?"),
 			tgbotapi.NewKeyboardButton("Баланс"),
 			tgbotapi.NewKeyboardButton("Средняя цена"),
 		),
@@ -239,18 +240,20 @@ func telegramBot() {
 				msg.Text = "Api key saved."
 				//break
 			}
+
 		case "setsecretkey":
 			secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
 			err := account.saveSecretKey(secretKey)
 			if err != nil {
 				msg.Text = "No correct secret key"
 				log.Warnf("can't save secret key account: %v", err)
-				//break
 			} else {
 				msg.Text = "Api secret key saved."
-				//break
 			}
 
+		case "Btc?":
+			msg.Text = ""
+			sendBtcGraph(account.Id)
 		case "Получить кол-во апи запросов":
 			msg.Text = "Count query api: " + getCountQueriesApi()
 		case "getcountqueriesapierror":
@@ -271,29 +274,24 @@ func telegramBot() {
 			//	msg.Text = "I don't know that command"
 		}
 
-		if _, err := bot.Send(msg); err != nil {
-			log.Warnf("can't send bot message: %v", err)
-		}
-
-		//continue
-		//}
-
 		if update.Message.Text == "" {
 			continue
+		}
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Warnf("can't send bot message: %v", err)
 		}
 
 		rate, err := getActualExchangeRate(update.Message.Text)
 
 		if err == nil {
 			msg.Text = "```" + rate + "```"
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
-			}
 		} else {
 			msg.Text = err.Error()
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf("can't send bot message getActualExchangeRate: %v", err)
-			}
+		}
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Warnf("can't send bot message getActualExchangeRate: %v", err)
 		}
 	}
 }
@@ -1256,12 +1254,17 @@ ORDER BY id ASC;
 	return times, closes, volumes
 }
 
-func sendCoinGraph() {
+func sendBtcGraph(accountId int64) {
 	var accounts []Account
-	err := dbConnect.Model(&accounts).
-		Where("account.is_enabled = ?", 1).
-		Where("binance_api_key IS NOT NULL AND binance_secret_key IS NOT NULL").
-		Select()
+	var query = dbConnect.Model(&accounts).
+		Where("account.is_enabled = ?", 1)
+
+	if accountId > 0 {
+		query.Where("account.id = ?", accountId)
+	}
+	query.Where("binance_api_key IS NOT NULL AND binance_secret_key IS NOT NULL")
+
+	err := query.Select()
 
 	if err != nil {
 		log.Warnf("can't get accounts by get notificationsOrdersAccounts: %v", err)
