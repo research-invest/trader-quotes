@@ -25,6 +25,7 @@ func CounterQueriesApiIncr() {
 		log.Panic("Error CounterQueriesApiIncr : %v", err)
 		panic(err)
 	}
+	//_, err = rdb.Expire(ctxRedis, CounterQueriesApiPrefix, 1*time.Hour).Result()
 }
 
 func CounterQueriesApiIncrError() {

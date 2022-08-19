@@ -1,6 +1,6 @@
 package main
 
-//GOOS=linux GOARCH=amd64 go build -o ./trader -a
+//GOOS=linux GOARCH=amd64 go build -o ./quotes -a
 
 //https://api.binance.com/api/v3/klines?interval=1m&limit=20&symbol=AVAXBUSD
 
@@ -13,7 +13,7 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/go-pg/pg/extra/pgdebug"
 	"github.com/go-pg/pg/v10"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/olekukonko/tablewriter"
 	"github.com/sirupsen/logrus"
 	"github.com/wcharczuk/go-chart"
@@ -45,40 +45,95 @@ func main() {
 		}
 	}()
 
-	//go func() {
-	//	telegramBot()
-	//}()
-	//
-	//go func() {
-	//	for {
-	//		getAccountsInfo()
-	//		getOrdersAccounts()
-	//		sendNotificationsAccounts()
-	//		time.Sleep(30 * time.Minute)
-	//	}
-	//}()
+	go func() {
+		telegramBot()
+	}()
+
+	go func() {
+		for {
+			getAccountsInfo()
+			getOrdersAccounts()
+			sendNotificationsAccounts()
+			time.Sleep(30 * time.Minute)
+		}
+	}()
 
 	testSendImages()
 
+
 	//getAccountsInfo()
 
-	//for {
-	//	t := time.Now()
-	//
-	//	if t.Hour() >= 3 && t.Hour() < 6 {
-	//		time.Sleep(1 * time.Hour) // temp
-	//	}
-	//
-	//	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
-	//		CounterQueriesApiSetZero()
-	//	}
-	//
-	//	if t.Second() == 0 {
-	//		getKlines()
-	//		time.Sleep(1 * time.Minute)
-	//	}
-	//}
+	for {
+		t := time.Now()
+
+		if t.Hour() >= 3 && t.Hour() < 6 {
+			time.Sleep(1 * time.Hour) // temp
+		}
+
+		if t.Hour() == 0 && t.Minute() == 0 {
+			CounterQueriesApiSetZero()
+		}
+
+		if t.Second() == 0 {
+			getKlines()
+			time.Sleep(1 * time.Minute)
+		}
+
+	}
 }
+
+//func wsTest() {
+//
+//	wsDepthHandler := func(event *binance.WsDepthEvent) {
+//		jsonF, _ := json.Marshal(event)
+//		fmt.Println(string(jsonF))
+//		fmt.Println("string(jsonF))")
+//	}
+//	errHandler := func(err error) {
+//		fmt.Println(err)
+//	}
+//	doneC, stopC, err := binance.WsDepthServe("BTCBUSD", wsDepthHandler, errHandler)
+//	if err != nil {
+//		fmt.Println(err)
+//		return
+//	}
+//	// use stopC to exit
+//	go func() {
+//		time.Sleep(5 * time.Second)
+//		stopC <- struct{}{}
+//	}()
+//	// remove this if you do not want to be blocked here
+//	<-doneC
+//
+//	//wsAggTradeHandler := func(event *binance.WsAggTradeEvent) {
+//	//	jsonF, _ := json.Marshal(event)
+//	//	fmt.Println(string(jsonF))
+//	//}
+//	//errHandler := func(err error) {
+//	//	fmt.Println(err)
+//	//}
+//	//doneC, _, err := binance.WsAggTradeServe("LTCBTC", wsAggTradeHandler, errHandler)
+//	//if err != nil {
+//	//	fmt.Println(err)
+//	//	return
+//	//}
+//	//<-doneC
+//
+//	return
+//	//wsKlineHandler := func(event *binance.WsKlineEvent) {
+//	//jsonF, _ := json.Marshal(event)
+//	//fmt.Println(string(jsonF))
+//	//}
+//	//errHandler := func(err error) {
+//	//	fmt.Println(err)
+//	//}
+//	//doneC, _, err := binance.WsKlineServe("BTCBUSD", "1m", wsKlineHandler, errHandler)
+//	//if err != nil {
+//	//	fmt.Println(err)
+//	//	return
+//	//}
+//	//<-doneC
+//}
 
 func dbInit() {
 	dbConnect = *pg.Connect(&pg.Options{
@@ -119,6 +174,19 @@ func telegramBot() {
 		log.Panic(err)
 	}
 
+	var replyMarkup = tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Баланс"),
+			tgbotapi.NewKeyboardButton("Средняя цена"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Статус"),
+			tgbotapi.NewKeyboardButton("Получить кол-во апи запросов"),
+			tgbotapi.NewKeyboardButton("Кол-во свечей 🕯"),
+			tgbotapi.NewKeyboardButton("Синхронизировать балансы"),
+		),
+	)
+
 	bot.Debug = false
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -126,7 +194,7 @@ func telegramBot() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates, _ := bot.GetUpdatesChan(u)
+	updates := bot.GetUpdatesChan(u)
 
 	for update := range updates {
 		if update.Message == nil { // ignore any non-Message updates
@@ -144,71 +212,73 @@ func telegramBot() {
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 		msg.ParseMode = "MarkdownV2"
-		if update.Message.IsCommand() { // ignore any non-command Messages
+		msg.ReplyMarkup = replyMarkup
 
-			/*
-				getbalance - Get balance info
-				syncbalance - Sync balance info
-				getavgprices - Get avg prices coins
-				getcountqueriesapi - Get count queries api
-				getcountqueriesapierror - Get count queries api error
-				getcountklines - Get count klines
-				status - Status service
-				setapikey - Set binance api key read only
-				setsecretkey - Set binance secret key read only
-			*/
+		//if update.Message.IsCommand() { // ignore any non-command Messages
 
-			// Extract the command from the Message.
-			switch update.Message.Command() {
-			case "setapikey":
-				apiKey := strings.Replace(update.Message.Text, "/setapikey", "", 1)
-				err := account.saveApiKey(apiKey)
-				if err != nil {
-					msg.Text = "No correct api key"
-					log.Warnf("can't save api key account: %v", err)
-					//break
-				} else {
-					msg.Text = "Api key saved."
-					//break
-				}
-			case "setsecretkey":
-				secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
-				err := account.saveSecretKey(secretKey)
-				if err != nil {
-					msg.Text = "No correct secret key"
-					log.Warnf("can't save secret key account: %v", err)
-					//break
-				} else {
-					msg.Text = "Api secret key saved."
-					//break
-				}
+		/*
+			getbalance - Get balance info
+			syncbalance - Sync balance info
+			getavgprices - Get avg prices coins
+			getcountqueriesapi - Get count queries api
+			getcountqueriesapierror - Get count queries api error
+			getcountklines - Get count klines
+			status - Status service
+			setapikey - Set binance api key read only
+			setsecretkey - Set binance secret key read only
+		*/
 
-			case "getcountqueriesapi":
-				msg.Text = "Count query api: " + getCountQueriesApi()
-			case "getcountqueriesapierror":
-				msg.Text = "Count query api errors: " + getCountQueriesApiError()
-			case "getcountklines":
-				msg.Text = "Count klines: " + strconv.FormatInt(getCountKlines(), 10)
-			case "status":
-				msg.Text = "I'm ok."
-			case "getbalance":
-				msg.Text = "```" + getBalanceInfo(account.Id) + "```"
-			case "getavgprices":
-				msg.Text = "```" + getAvgPrices(account.Id) + "```"
-			case "syncbalance":
-				getAccountsInfo()
-				getOrdersAccounts()
-				msg.Text = "sync"
-			default:
-				msg.Text = "I don't know that command"
+		// Extract the command from the Message.
+		switch update.Message.Text {
+		case "setapikey":
+			apiKey := strings.Replace(update.Message.Text, "/setapikey", "", 1)
+			err := account.saveApiKey(apiKey)
+			if err != nil {
+				msg.Text = "No correct api key"
+				log.Warnf("can't save api key account: %v", err)
+				//break
+			} else {
+				msg.Text = "Api key saved."
+				//break
+			}
+		case "setsecretkey":
+			secretKey := strings.Replace(update.Message.Text, "/setsecretkey", "", 1)
+			err := account.saveSecretKey(secretKey)
+			if err != nil {
+				msg.Text = "No correct secret key"
+				log.Warnf("can't save secret key account: %v", err)
+				//break
+			} else {
+				msg.Text = "Api secret key saved."
+				//break
 			}
 
-			if _, err := bot.Send(msg); err != nil {
-				log.Warnf("can't send bot message: %v", err)
-			}
-
-			continue
+		case "Получить кол-во апи запросов":
+			msg.Text = "Count query api: " + getCountQueriesApi()
+		case "getcountqueriesapierror":
+			msg.Text = "Count query api errors: " + getCountQueriesApiError()
+		case "Кол-во свечей 🕯":
+			msg.Text = "Кол-во свечей: " + strconv.FormatInt(getCountKlines(), 10)
+		case "Статус":
+			msg.Text = "Все нормально, 😉 работаем"
+		case "Баланс":
+			msg.Text = "```" + getBalanceInfo(account.Id) + "```"
+		case "Средняя цена":
+			msg.Text = "```" + getAvgPrices(account.Id) + "```"
+		case "Синхронизировать балансы":
+			getAccountsInfo()
+			getOrdersAccounts()
+			msg.Text = "sync"
+		default:
+			msg.Text = "I don't know that command"
 		}
+
+		if _, err := bot.Send(msg); err != nil {
+			log.Warnf("can't send bot message: %v", err)
+		}
+
+		continue
+		//}
 
 		rate, err := getActualExchangeRate(update.Message.Text)
 
@@ -239,7 +309,7 @@ WITH coin_pairs_close_time AS (
     FROM klines AS k
     INNER JOIN coins_pairs cp on cp.id = k.coin_pair_id
     INNER JOIN coins c on c.id = cp.coin_id
-    WHERE cp.is_enabled = 1 AND c.is_enabled = 1
+    WHERE cp.is_enabled = 1 AND c.is_enabled = 1 AND k.close_time >= NOW() - INTERVAL '30 DAYS'
     ORDER BY k.coin_pair_id, k.close_time DESC
 )
 
@@ -319,7 +389,7 @@ func getKlines() {
 	for _, pair := range pairs {
 
 		klines, err := client.NewKlinesService().Symbol(strings.ToUpper(pair.Pair)).
-			Interval(pair.Interval).Limit(100).Do(context.Background())
+			Interval(pair.Interval).Do(context.Background())
 
 		CounterQueriesApiIncr()
 
@@ -355,7 +425,7 @@ func getKlines() {
 			newKline := &Kline{
 				CoinPairId:               pair.CoinPairId,
 				OpenTime:                 getTimestampFromMilliseconds(kline.OpenTime),
-				CloseTime:                getTimestampFromMilliseconds(kline.CloseTime),
+				CloseTime:                getTimestampFromMilliseconds(kline.CloseTime - 1000),
 				Open:                     open,
 				High:                     high,
 				Low:                      low,
@@ -370,7 +440,7 @@ func getKlines() {
 			}
 
 			count, err := dbConnect.Model(newKline).
-				Where("coin_pair_id = ?coin_pair_id AND open_time > ?open_time").
+				Where("coin_pair_id = ?coin_pair_id AND open_time = ?open_time").
 				Count()
 
 			if count == 0 {
@@ -1016,18 +1086,16 @@ func getNotificationsAccountsText(accountId int64) string {
 
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Name", "Rank", "10m", "1h", "4h", "12h", "24h", "%"})
+	table.SetHeader([]string{"Name", "10m", "1h", "4h", "12h", "24h"})
 	table.SetCaption(true, "Balance.")
 	for _, coin := range coins {
 		table.Append([]string{
-			coin.Code,
-			IntToStr(coin.Rank),
+			coin.Code + "[" + IntToStr(coin.Rank) + "]",
 			FloatToStr(coin.Minute10),
 			FloatToStr(coin.Hour),
 			FloatToStr(coin.Hour4),
 			FloatToStr(coin.Hour12),
 			FloatToStr(coin.Hour24),
-			FloatToStr(coin.PercentSum),
 		})
 	}
 
@@ -1061,73 +1129,85 @@ WITH coin_pairs_24_hours AS (
     ORDER BY c.rank
 )
 
-SELECT t.*
-
+SELECT *
 FROM (
-         SELECT DISTINCT ON (t.coin_id) t.coin_id,
-                                        t.code,
-                                        t.rank,
-                                        minute10.percent AS minute10,
-                                        hour.percent     AS hour,
-                                        hour4.percent    AS hour4,
-                                        hour12.percent   AS hour12,
-                                        hour24.percent   AS hour24,
-                                        ROUND(CAST(COALESCE(minute10.percent, 0) + COALESCE(hour.percent, 0) + COALESCE(hour4.percent, 0) + COALESCE(hour12.percent, 0) + COALESCE(hour24.percent, 12) AS NUMERIC), 3) AS percent_sum
-         FROM coin_pairs_24_hours AS t
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
-                OR (t.open_time <= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE') AND
-                    t.close_time >= NOW())
-             GROUP BY t.coin_pair_id
-         ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
-             GROUP BY t.coin_pair_id
-         ) as hour ON t.coin_pair_id = hour.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
-             GROUP BY t.coin_pair_id
-         ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
-             GROUP BY t.coin_pair_id
-         ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
-                  LEFT JOIN (
-             SELECT t.coin_pair_id,
-                    MIN(t.open)                             AS min_open,
-                    MAX(t.close)                            AS max_close,
-                    CAlC_PERCENT(MIN(t.open), MAX(t.close)) AS percent
-             FROM coin_pairs_24_hours AS t
-             GROUP BY t.coin_pair_id
-         ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
---          WHERE (
---                        (minute10.percent >= 2 OR minute10.percent <= -2)
---                        OR (hour.percent >= 3 OR hour.percent <= -3)
---                        OR (hour4.percent >= 4 OR hour4.percent <= -4)
---                        OR (hour12.percent >= 8 OR hour12.percent <= -8)
---                        OR (hour24.percent >= 10 OR hour24.percent <= -10))
-         ORDER BY t.coin_id
-         LIMIT 45
+         SELECT t.*,
+                ROUND(CAST((COALESCE(t.minute10, 0) + COALESCE(t.hour, 0) +
+                            COALESCE(t.hour4, 0) + COALESCE(t.hour12, 0) +
+                            COALESCE(t.hour24, 0)) AS NUMERIC), 3) AS percent_sum
+         FROM (
+
+                           SELECT DISTINCT ON (t.coin_id) t.coin_id,
+                                                          t.code,
+                                                          t.rank,
+                                                          CAlC_PERCENT(MIN(COALESCE(minute10.first_open, 0)), MIN(COALESCE(minute10.last_close, 0))) AS minute10,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour.first_open, 0)), MIN(COALESCE(hour.last_close, 0)))         AS hour,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour4.first_open, 0)), MIN(COALESCE(hour4.last_close, 0)))       AS hour4,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour12.first_open, 0)), MIN(COALESCE(hour12.last_close, 0)))     AS hour12,
+                                                          CAlC_PERCENT(MIN(COALESCE(hour24.first_open, 0)), MIN(COALESCE(hour24.last_close, 0)))     AS hour24
+
+                           FROM coin_pairs_24_hours AS t
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE')
+                                  OR (t.open_time <= date_round_down(NOW() - interval '10 MINUTE', '10 MINUTE') AND
+                                      t.close_time >= NOW())
+                               GROUP BY t.coin_pair_id
+                           ) as minute10 ON t.coin_pair_id = minute10.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '1 HOUR', '1 HOUR')
+                               GROUP BY t.coin_pair_id
+                           ) as hour ON t.coin_pair_id = hour.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
+                               GROUP BY t.coin_pair_id
+                           ) as hour4 ON t.coin_pair_id = hour4.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               WHERE t.open_time >= date_round_down(NOW() - interval '12 HOUR', '1 HOUR')
+                               GROUP BY t.coin_pair_id
+                           ) as hour12 ON t.coin_pair_id = hour12.coin_pair_id
+                                    LEFT JOIN (
+                               SELECT t.coin_pair_id,
+                                      MIN(t.open)                                       AS min_open,
+                                      MAX(t.close)                                      AS max_close,
+                                      (array_agg(t.open order by t.open_time asc))[1]   as first_open,
+                                      (array_agg(t.close order by t.open_time desc))[1] as last_close
+                               FROM coin_pairs_24_hours AS t
+                               GROUP BY t.coin_pair_id
+                           ) AS hour24 ON t.coin_pair_id = hour24.coin_pair_id
+                           GROUP BY t.coin_id, t.code, t.rank
+                           ORDER BY t.coin_id
+                           LIMIT 45
+                       ) AS t
+                        WHERE (
+                                (t.minute10 >= 2 OR t.minute10 <= -2)
+                                OR (t.hour >= 3 OR t.hour <= -3)
+                                OR (t.hour4 >= 4 OR t.hour4 <= -4)
+                                OR (t.hour12 >= 8 OR t.hour12 <= -8)
+                                OR (t.hour24 >= 10 OR t.hour24 <= -10))
      ) AS t
 ORDER BY percent_sum DESC;
 `, accountId)

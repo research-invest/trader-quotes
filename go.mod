@@ -9,6 +9,8 @@ require (
 	github.com/go-pg/pg/v10 v10.9.0
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/sirupsen/logrus v1.4.2
 
 )
@@ -23,12 +25,10 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/klauspost/compress v1.13.1 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mattn/go-runewidth v0.0.12 // indirect
-	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect
@@ -44,5 +44,4 @@ require (
 	golang.org/x/image v0.0.0-20220321031419-a8550c1d254a // indirect
 	golang.org/x/sys v0.0.0-20210423082822-04245dca01da // indirect
 	mellium.im/sasl v0.2.1 // indirect
-	nhooyr.io/websocket v1.8.7 // indirect
 )
