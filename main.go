@@ -53,13 +53,13 @@ func main() {
 		for {
 			getAccountsInfo()
 			getOrdersAccounts()
+			sendCoinGraph()
 			sendNotificationsAccounts()
 			time.Sleep(30 * time.Minute)
 		}
 	}()
 
-	testSendImages()
-
+	//sendCoinGraph()
 	//getAccountsInfo()
 
 	for {
@@ -1224,16 +1224,16 @@ ORDER BY percent_sum DESC;
 
 func getDataForBtcGraph() ([]time.Time, []float64, []float64) {
 	var times []time.Time
-	var closes []float64
-	var volumes []float64
+	var closes, volumes []float64
 	var klines []Kline
 	coin := "BTC"
+
 	res, err := dbConnect.Query(&klines, `
 SELECT klines.*
 FROM klines
 INNER JOIN coins_pairs cp on klines.coin_pair_id = cp.id
 INNER JOIN coins c on c.id = cp.coin_id
-WHERE open_time >=  date_round_down(NOW() - interval '1 DAY', '1 DAY')
+WHERE open_time >=  date_round_down(NOW() - interval '4 HOUR', '1 HOUR')
  AND c.code = ?
 ORDER BY id ASC;
 `, coin)
@@ -1249,10 +1249,6 @@ ORDER BY id ASC;
 
 	for _, kline := range klines {
 		times = append(times, kline.OpenTime)
-
-		//parsed, _ := time.Parse(chart.DefaultDateFormat, kline.OpenTime)
-		//times = append(times, parsed)
-
 		closes = append(closes, kline.Close)
 		volumes = append(volumes, kline.QuoteAssetVolume)
 	}
@@ -1260,7 +1256,7 @@ ORDER BY id ASC;
 	return times, closes, volumes
 }
 
-func testSendImages() {
+func sendCoinGraph() {
 	var accounts []Account
 	err := dbConnect.Model(&accounts).
 		Where("account.is_enabled = ?", 1).
@@ -1283,7 +1279,7 @@ func testSendImages() {
 	xv, yv, _ := getDataForBtcGraph()
 
 	priceSeries := chart.TimeSeries{
-		Name: "SPY",
+		Name: "BTC 4H",
 		Style: chart.Style{
 			Show:        true,
 			StrokeColor: chart.GetDefaultColor(0),
@@ -1293,7 +1289,7 @@ func testSendImages() {
 	}
 
 	smaSeries := chart.SMASeries{ // красная линия
-		Name: "SPY - SMA",
+		Name: "BTC - SMA",
 		Style: chart.Style{
 			Show:            true,
 			StrokeColor:     drawing.ColorRed,
@@ -1303,7 +1299,7 @@ func testSendImages() {
 	}
 
 	bbSeries := &chart.BollingerBandsSeries{ //фоновый
-		Name: "SPY - Bol. Bands",
+		Name: "BTC - Bol. Bands",
 		Style: chart.Style{
 			Show:        true,
 			StrokeColor: drawing.ColorFromHex("efefef"),
