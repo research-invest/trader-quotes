@@ -53,7 +53,7 @@ func main() {
 		for {
 			getAccountsInfo()
 			getOrdersAccounts()
-			sendBtcGraph(0)
+			sendBtcGraph(0, "")
 			sendNotificationsAccounts()
 			time.Sleep(30 * time.Minute)
 		}
@@ -253,7 +253,7 @@ func telegramBot() {
 
 		case "Btc?":
 			msg.Text = ""
-			sendBtcGraph(account.Id)
+			sendBtcGraph(account.Id, "")
 		case "Получить кол-во апи запросов":
 			msg.Text = "Count query api: " + getCountQueriesApi()
 		case "getcountqueriesapierror":
@@ -292,6 +292,12 @@ func telegramBot() {
 
 		if _, err := bot.Send(msg); err != nil {
 			log.Warnf("can't send bot message getActualExchangeRate: %v", err)
+		}
+
+		if rate != "" {
+			coin := strings.ToUpper(strings.TrimSpace(update.Message.Text))
+			coin = strings.Replace(coin, "?", "", 100)
+			sendBtcGraph(account.Id, coin)
 		}
 	}
 }
@@ -1220,11 +1226,14 @@ ORDER BY percent_sum DESC;
 	return nil
 }
 
-func getDataForBtcGraph() ([]time.Time, []float64, []float64) {
+func getDataForBtcGraph(coin string) ([]time.Time, []float64, []float64) {
 	var times []time.Time
 	var closes, volumes []float64
 	var klines []Kline
-	coin := "BTC"
+
+	if coin == "" {
+		coin = "BTC"
+	}
 
 	res, err := dbConnect.Query(&klines, `
 SELECT klines.*
@@ -1254,7 +1263,7 @@ ORDER BY id ASC;
 	return times, closes, volumes
 }
 
-func sendBtcGraph(accountId int64) {
+func sendBtcGraph(accountId int64, coin string) {
 	var accounts []Account
 	var query = dbConnect.Model(&accounts).
 		Where("account.is_enabled = ?", 1)
@@ -1279,10 +1288,14 @@ func sendBtcGraph(accountId int64) {
 
 	bot.Debug = false //!!!!
 
-	xv, yv, _ := getDataForBtcGraph()
+	xv, yv, _ := getDataForBtcGraph(coin)
+
+	if len(xv) == 0 {
+		return
+	}
 
 	priceSeries := chart.TimeSeries{
-		Name: "BTC 4H",
+		Name: coin + " 4H",
 		Style: chart.Style{
 			Show:        true,
 			StrokeColor: chart.GetDefaultColor(0),
@@ -1292,7 +1305,7 @@ func sendBtcGraph(accountId int64) {
 	}
 
 	smaSeries := chart.SMASeries{ // красная линия
-		Name: "BTC - SMA",
+		Name: coin + " - SMA",
 		Style: chart.Style{
 			Show:            true,
 			StrokeColor:     drawing.ColorRed,
@@ -1302,7 +1315,7 @@ func sendBtcGraph(accountId int64) {
 	}
 
 	bbSeries := &chart.BollingerBandsSeries{ //фоновый
-		Name: "BTC - Bol. Bands",
+		Name: coin + " - Bol. Bands",
 		Style: chart.Style{
 			Show:        true,
 			StrokeColor: drawing.ColorFromHex("efefef"),
@@ -1321,8 +1334,8 @@ func sendBtcGraph(accountId int64) {
 		YAxis: chart.YAxis{
 			Style: chart.Style{Show: true},
 			Range: &chart.ContinuousRange{
-				Max: max + 200,
-				Min: min - 400,
+				Max: max,
+				Min: min,
 			},
 		},
 		Series: []chart.Series{
