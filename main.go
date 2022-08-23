@@ -1286,6 +1286,10 @@ func sendBtcGraph(accountId int64, coin string) {
 		return
 	}
 
+	if coin == "" {
+		coin = "BTC"
+	}
+
 	bot.Debug = false //!!!!
 
 	xv, yv, _ := getDataForBtcGraph(coin)
